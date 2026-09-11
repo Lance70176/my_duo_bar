@@ -15,5 +15,5 @@ jobs:
         run: ./scripts/build.sh
       - name: Verify universal binary and signature
         run: |
-          lipo -verify_arch arm64 x86_64 build/DuoBar.app/Contents/MacOS/DuoBar
+          lipo build/DuoBar.app/Contents/MacOS/DuoBar -verify_arch arm64 x86_64
           codesign --verify --deep --strict build/DuoBar.app
