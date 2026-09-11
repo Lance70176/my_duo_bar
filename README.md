@@ -1,0 +1,86 @@
+<p align="center"><img src="docs/icon.png" width="96" alt="DuoBar 图标"></p>
+
+# DuoBar
+
+把电池、Wi-Fi 和四项状态放进一个圆形菜单栏图标。原生 AppKit、本地运行，没有 Dock 图标、账号或额外依赖。
+
+**[下载安装包](https://github.com/n977485865-create/DuoBar/releases)** · **[完整安装说明](docs/安装说明.txt)**
+
+## 安装
+
+下载 Release 中的 `DuoBar-0.1.2-universal.dmg`，打开后把 **DuoBar.app 拖进 Applications**，再从“应用程序”中启动。也可以下载 ZIP，解压后把应用移到“应用程序”。
+
+安装包包含 Apple Silicon 和 Intel 两种架构，要求 macOS 13 或更新版本。Apple Silicon 已实机验证，Intel 已完成编译与架构检查，尚未在 Intel 真机验收。
+
+当前版本未使用 Developer ID 签名，也未经过 Apple 公证。首次打开可能被 macOS 拦截。确认文件来自本项目后，先尝试打开，再进入 **系统设置 → 隐私与安全性 → 仍要打开**，按系统提示确认。无需关闭整机安全机制或运行终端命令。受企业管理的 Mac 可能无法自行允许。
+
+## 第一次使用
+
+第一次启动会显示设置。图标和动画已经包含在应用中，但系统权限和菜单栏位置需要在每台 Mac 上分别设置。
+
+1. **位置**：按住 ⌘ 拖动 DuoBar 到控制中心左侧。macOS 会记住你的位置；应用不强行重排其他图标。公开 API 没有按另一个应用的图标进行相对定位的选项，因此不能保证首次安装自动出现在所有 Mac 的同一位置。
+2. **原生图标**：点击“关闭对应状态栏”，在系统设置中选择是否隐藏原生 Wi-Fi、电池等图标。
+3. **登录启动**：需要时勾选“登录时自动启动”。
+4. **Wi-Fi 名称**：需要时允许定位权限。没有权限仍显示连接与信号，应用不请求地理坐标。
+5. **专注状态**：依赖系统允许共享。没有可读状态时圆点置灰，菜单标注“状态未共享”。当前版本尚未完成授权后真实专注切换的验收。
+
+单击菜单栏图标查看详情，按 Esc 或点击外部收起。没有悬停展开。
+
+## 图标与圆点
+
+- 电池圆弧稍粗，电量降低时从右侧开始消退，左端固定。
+- 中间显示 Wi-Fi，信号用“信号很好 / 信号一般 / 信号较弱”表达。
+- 底部圆点从左到右默认为 **VPN、耳机、静音、专注**。所有圆点等大，开启时点亮，未开启或未知时置灰。
+- 设置里可调整圆点顺序、单独隐藏或全部隐藏，立即生效并在重启后保留。隐藏的是圆点，菜单仍可查看状态详情。
+- Wi-Fi 连接、网络名称、信号档位或四个状态开关变化时，Wi-Fi 保持正向并淡入切换；圆弧短幅转动、点阵沿圆周错开跟随，约 0.68 秒后平滑归位，结束后停止动画刷新。
+- 电量变化平滑补间；首次启动和同一信号档位内的小波动不触发回摆。系统开启“减少动态效果”时直接显示新状态。
+- 接通电源时圆环平滑变绿并轻扫一次，约 1.05 秒结束，连接期间保持绿色（包括充电暂停或已充满）。断开后平滑恢复普通颜色。持续充电不会不断播放动画。
+
+不同电脑的电量、连接设备、VPN 和专注状态不同，亮点数量与实际数值也会不同。台式 Mac 没有内置电池时显示外接电源，不会编造电量。
+
+## 本地处理与限制
+
+没有账号、云同步、服务器、遥测或第三方运行库。只保存圆点显示设置等本机偏好。
+
+| 状态 | 读取方式与边界 |
+| --- | --- |
+| 电池 | IOKit 电源信息 |
+| Wi-Fi | CoreWLAN；SSID 可能被系统隐去 |
+| VPN | 系统连接服务、系统代理及可确认的广域 TUN 路由；适配 Mihomo 分段路由。普通 utun 本身不会点亮。它表示配置或路由状态，不验证互联网可达性或加密状况 |
+| 耳机 | CoreAudio 已连接并提供输出通道的耳机；普通蓝牙键鼠不会点亮 |
+| 静音 | 默认输出的静音标记或零音量；不录制、读取或播放音频 |
+| 专注 | Intents 公开共享接口；不区分具体专注模式，不读取受保护的系统数据库 |
+
+系统事件驱动刷新，另以 30 秒补查；菜单打开时补查间隔为 3 秒，睡眠时停止补查。
+
+## 开发与构建
+
+需要 macOS 和 Xcode Command Line Tools，无需安装其他依赖。
+
+```sh
+./scripts/test.sh
+./scripts/build.sh
+./scripts/package.sh --skip-build
+```
+
+- 应用：`build/DuoBar.app`
+- 安装磁盘：`dist/DuoBar-0.1.2-universal.dmg`
+- 压缩包：`dist/DuoBar-0.1.2-universal.zip`
+
+74 项状态检查覆盖组合、未知状态、显示偏好保存、Wi-Fi 文案、VPN 路由和动画触发。AppKit 检查验证电量方向、圆点大小、分部归位、充电过渡与停止刷新。GitHub Actions 自动运行检查并构建两种架构。
+
+目前实机验收为 Apple Silicon / macOS 26.6.2，包含菜单交互、圆点设置与重启保留、状态读取、系统设置跳转及登录项注册/取消。实际注销登录、睡眠唤醒、Intel 和其他 macOS 版本尚未验收。
+
+## 联系开发者
+
+- [前往小红书](https://www.xiaohongshu.com/user/profile/5fd62d06000000000101e8b1)
+- 微信：**nybbamboo**
+- 邮箱：[nybbamboo@163.com](mailto:nybbamboo@163.com)
+
+## 参考
+
+- [图形灵感：三合一状态图标视频](https://www.xiaohongshu.com/explore/6aa212b70000000026033768)
+- [Apple：NSStatusItem](https://developer.apple.com/documentation/appkit/nsstatusitem)
+- [Apple：安全打开 Mac 应用](https://support.apple.com/102445)
+- [Apple：INFocusStatusCenter](https://developer.apple.com/documentation/intents/infocusstatuscenter)
+- [Apple：SMAppService](https://developer.apple.com/documentation/servicemanagement/smappservice)
