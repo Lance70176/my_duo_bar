@@ -95,7 +95,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         stack.addArrangedSubview(contactRow("小红书：", title: "一键前往", action: #selector(openXiaohongshu)))
         stack.addArrangedSubview(contactRow("微信：", title: "nybbamboo", action: #selector(copyWeChat), feedback: wechatCopied))
         stack.addArrangedSubview(contactRow("邮箱：", title: "nybbamboo@163.com", action: #selector(copyEmail), feedback: emailCopied))
-        stack.addArrangedSubview(note("0.1.2 · 本地运行"))
+        stack.addArrangedSubview(note("0.1.3 · 本地运行"))
     }
 
     private func contactRow(_ label: String, title: String, action: Selector, feedback: NSTextField? = nil) -> NSStackView {

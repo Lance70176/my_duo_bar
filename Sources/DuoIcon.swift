@@ -3,6 +3,7 @@ import AppKit
 /// Vector renderer shared by the menu item and its live settings icon.
 enum DuoIcon {
     static let size = NSSize(width: 32, height: 26)
+    static let strokeWidth: CGFloat = 2.8
 
     static func image(status: SystemStatus, layout: DotLayout = DotLayout(), template: Bool = true) -> NSImage {
         let image = NSImage(size: size, flipped: false) { rect in
@@ -20,6 +21,7 @@ enum DuoIcon {
         ctx.scaleBy(x: rect.width / size.width, y: rect.height / size.height)
         let dots = layout.visible
         let frame = presentation ?? .steady(status)
+        let strokeWidth = Self.strokeWidth + frame.chargePulse * 0.30
         let center = NSPoint(x: 16, y: 13.0)
         let radius: CGFloat = 10.3
         // The bottom dots and battery stroke share one circular path.
@@ -35,7 +37,7 @@ enum DuoIcon {
             guard fraction > 0 else { return }
             ringColor.withAlphaComponent(alpha).setStroke()
             let path = NSBezierPath()
-            path.lineWidth = 2.05 + frame.chargePulse * 0.30
+            path.lineWidth = strokeWidth
             path.lineCapStyle = .round
             path.appendArc(withCenter: center, radius: radius, startAngle: start,
                            endAngle: start + sweep * fraction, clockwise: true)
@@ -46,7 +48,7 @@ enum DuoIcon {
         if let phase = frame.chargeSweep, let percent = frame.percent {
             let length = sweep * percent / 100
             let end = start + length * phase
-            let path = NSBezierPath(); path.lineWidth = 2.2; path.lineCapStyle = .round
+            let path = NSBezierPath(); path.lineWidth = strokeWidth; path.lineCapStyle = .round
             green.blended(withFraction: 0.7, of: .white)?.withAlphaComponent(sin(.pi*phase)*0.8).setStroke()
             path.appendArc(withCenter: center, radius: radius, startAngle: min(start, end+22), endAngle: end, clockwise: true)
             path.stroke()
@@ -68,9 +70,9 @@ enum DuoIcon {
         // Equal-sized dots: only opacity changes with the state.
         for (index, glyph) in dots.enumerated() {
             let active = frame.active[glyph] ?? 0
-            let diameter: CGFloat = 2.40
-            color.withAlphaComponent(0.30 + 0.70*active).setFill()
-            let angle = (270 + (CGFloat(index) - CGFloat(dots.count - 1) / 2) * 20) * .pi / 180 + frame.dotAngles[index]
+            let diameter = strokeWidth
+            color.withAlphaComponent(0.50 + 0.50*active).setFill()
+            let angle = (270 + (CGFloat(index) - CGFloat(dots.count - 1) / 2) * 20) * .pi / 180 + frame.ringAngle
             let point = NSPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
             NSBezierPath(ovalIn: NSRect(x: point.x - diameter / 2, y: point.y - diameter / 2,
                                        width: diameter, height: diameter)).fill()
