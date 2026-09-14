@@ -13,3 +13,10 @@ xcrun swiftc -O -swift-version 5 -module-cache-path "$DUOBAR_ROOT/build/module-c
     "$DUOBAR_ROOT/Sources/DuoIcon.swift" "$DUOBAR_ROOT/Sources/IconMotion.swift" "$DUOBAR_ROOT/Sources/StatusIconView.swift" \
     "$DUOBAR_ROOT/Tests/IconTests.swift" -o "$DUOBAR_ROOT/build/tests/IconTests"
 "$DUOBAR_ROOT/build/tests/IconTests"
+
+xcrun swiftc -O -swift-version 5 -module-cache-path "$DUOBAR_ROOT/build/module-cache" \
+    "$DUOBAR_ROOT/Sources/StatusModel.swift" "$DUOBAR_ROOT/Sources/DotPreferences.swift" \
+    "$DUOBAR_ROOT/Sources/DuoIcon.swift" "$DUOBAR_ROOT/Sources/IconMotion.swift" \
+    "$DUOBAR_ROOT/Sources/SystemSettings.swift" "$DUOBAR_ROOT/Sources/StatusPanel.swift" \
+    "$DUOBAR_ROOT/Tests/PanelTests.swift" -o "$DUOBAR_ROOT/build/tests/PanelTests"
+"$DUOBAR_ROOT/build/tests/PanelTests"

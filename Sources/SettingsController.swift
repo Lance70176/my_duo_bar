@@ -3,21 +3,6 @@ import ServiceManagement
 import CoreLocation
 import Intents
 
-enum SystemSettings {
-    static func open(_ kind: String) {
-        let suffix: String
-        switch kind {
-        case "wifi": suffix = "com.apple.wifi-settings-extension"
-        case "focus": suffix = "com.apple.Focus-Settings.extension"
-        case "sound": suffix = "com.apple.Sound-Settings.extension"
-        case "vpn": suffix = "com.apple.NetworkExtensionSettingsUI.NESettingsUIExtension"
-        case "menubar": suffix = "com.apple.ControlCenter-Settings.extension"
-        default: suffix = "com.apple.ControlCenter-Settings.extension"
-        }
-        if let url = URL(string: "x-apple.systempreferences:" + suffix) { NSWorkspace.shared.open(url) }
-    }
-}
-
 final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private let preferences: DotPreferences
     private let dotRows = NSStackView()
@@ -95,7 +80,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         stack.addArrangedSubview(contactRow("小红书：", title: "一键前往", action: #selector(openXiaohongshu)))
         stack.addArrangedSubview(contactRow("微信：", title: "nybbamboo", action: #selector(copyWeChat), feedback: wechatCopied))
         stack.addArrangedSubview(contactRow("邮箱：", title: "nybbamboo@163.com", action: #selector(copyEmail), feedback: emailCopied))
-        stack.addArrangedSubview(note("0.1.4 · 本地运行"))
+        stack.addArrangedSubview(note("0.1.5 · 本地运行"))
     }
 
     private func contactRow(_ label: String, title: String, action: Selector, feedback: NSTextField? = nil) -> NSStackView {
@@ -203,7 +188,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         }
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
-    @objc private func openMenuBar() { SystemSettings.open("menubar") }
+    @objc private func openMenuBar() { SystemSettings.open(.menubar) }
     @objc private func requestLocation() { location.requestWhenInUseAuthorization() }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { onRefresh?() }
 
@@ -229,7 +214,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
             alert.informativeText = "请在系统设置中允许 DuoBar 读取专注状态，并在专注模式 → 专注状态中开启共享。DuoBar 只读取是否专注，开启时点亮圆点。"
             alert.addButton(withTitle: "打开专注设置")
             alert.addButton(withTitle: "稍后")
-            if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open("focus") }
+            if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open(.focus) }
             return
         }
         center.requestAuthorization { [weak self] _ in

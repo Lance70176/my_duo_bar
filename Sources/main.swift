@@ -17,9 +17,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.autosaveName = "DuoBar"
         item.isVisible = true
         if let button = item.button {
+            // Reserve the full drawing height; AppKit sizes the status item to this image.
+            button.image = NSImage(size: DuoIcon.size)
+            button.imagePosition = .imageOnly
             canvas.frame = button.bounds
             canvas.autoresizingMask = [.width, .height]
             button.addSubview(canvas)
+        }
+        panel.onOpenSettings = { [weak self] page in
+            self?.menu.cancelTracking()
+            DispatchQueue.main.async { SystemSettings.open(page) }
         }
         menu.delegate = self
         menu.autoenablesItems = false
@@ -87,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         settings?.present(status: monitor.status)
     }
-    @objc private func openSystemIcons() { SystemSettings.open("menubar") }
+    @objc private func openSystemIcons() { SystemSettings.open(.menubar) }
     @objc private func quitApp() { NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop() }
 }

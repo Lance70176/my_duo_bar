@@ -16,7 +16,7 @@ struct IconFrame {
     }
 }
 
-/// The GIF's joined outer circle: one smooth turn, a small overshoot, then rest.
+/// The joined outer circle makes one smooth turn, settles, then rests.
 /// Wi-Fi stays upright. A complete turn lets a state change start and end in place.
 enum IconTurn {
     static let duration: TimeInterval = 1.43
@@ -25,7 +25,7 @@ enum IconTurn {
             let t = CGFloat(min(1, max(0, value)))
             return t*t*t*(t*(t*6-15)+10)
         }
-        // Same timing ratio and 9-degree settling motion as the fusion GIF.
+        // Ease into the turn and settle back by nine degrees.
         let turnTime = duration * (1.06 / 1.43)
         let degrees: CGFloat
         if elapsed < turnTime { degrees = -369 * smootherStep(elapsed / turnTime) }

@@ -25,7 +25,7 @@ final class StatusIconView: NSView {
             shape.lineWidth = DuoIcon.strokeWidth
             shape.lineCap = .round
             let path = CGMutablePath()
-            path.addArc(center: CGPoint(x: 16, y: 13), radius: 10.3,
+            path.addArc(center: DuoIcon.center, radius: DuoIcon.radius,
                         startAngle: 210 * .pi/180, endAngle: -30 * .pi/180, clockwise: true)
             shape.path = path
             outer.addSublayer(shape)
@@ -39,7 +39,8 @@ final class StatusIconView: NSView {
     override func layout() {
         super.layout()
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        let frame = NSRect(x: bounds.midX-16, y: bounds.midY-13, width: 32, height: 26)
+        let frame = NSRect(x: bounds.midX-DuoIcon.size.width/2, y: bounds.midY-DuoIcon.size.height/2,
+                           width: DuoIcon.size.width, height: DuoIcon.size.height)
         outer.frame = frame; center.frame = frame
         CATransaction.commit()
     }
@@ -76,15 +77,16 @@ final class StatusIconView: NSView {
                 dot.isHidden = index >= visible.count
                 guard index < visible.count else { continue }
                 let angle = (270 + (CGFloat(index)-CGFloat(visible.count-1)/2)*20) * .pi/180
-                let point = CGPoint(x: 16+10.3*cos(angle), y: 13+10.3*sin(angle))
-                let diameter = DuoIcon.strokeWidth
+                let point = CGPoint(x: DuoIcon.center.x+DuoIcon.radius*cos(angle),
+                                    y: DuoIcon.center.y+DuoIcon.radius*sin(angle))
+                let diameter = DuoIcon.dotDiameter
                 dot.path = CGPath(ellipseIn: CGRect(x: point.x-diameter/2, y: point.y-diameter/2,
                                                    width: diameter, height: diameter), transform: nil)
                 dot.fillColor = color.cgColor
                 transition(dot, "opacity", to: visible[index].isActive(in: value) ? Float(1) : Float(0.50), animated: animated)
             }
             let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
-            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(32*scale), pixelsHigh: Int(26*scale),
+            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(DuoIcon.size.width*scale), pixelsHigh: Int(DuoIcon.size.height*scale),
                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                 bytesPerRow: 0, bitsPerPixel: 0)!
             rep.size = DuoIcon.size

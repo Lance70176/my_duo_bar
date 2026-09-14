@@ -1,14 +1,29 @@
 import AppKit
 
-final class StatusRow: NSView {
+final class StatusRow: NSButton {
+    var destination: SystemSettings.Page
+    var onActivate: (() -> Void)?
+    private var hover = false
+    private var hoverTracking: NSTrackingArea?
+    private let chevron = NSImageView()
     private let symbol = NSImageView()
     private let titleField = NSTextField(labelWithString: "")
     private let detailField = NSTextField(labelWithString: "")
     private let valueField = NSTextField(labelWithString: "")
     override var allowsVibrancy: Bool { true }
 
-    init(height: CGFloat, compact: Bool = false) {
+    init(height: CGFloat, destination: SystemSettings.Page, compact: Bool = false) {
+        self.destination = destination
         super.init(frame: NSRect(x: 0, y: 0, width: 300, height: height))
+        title = ""
+        isBordered = false
+        setButtonType(.momentaryChange)
+        focusRingType = .default
+        target = self; action = #selector(activateRow)
+        setAccessibilityIdentifier("status-" + destination.rawValue)
+        chevron.image = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 10, weight: .medium))
+        chevron.contentTintColor = .tertiaryLabelColor
         translatesAutoresizingMaskIntoConstraints = false
         heightAnchor.constraint(equalToConstant: height).isActive = true
         symbol.imageScaling = .scaleProportionallyDown
@@ -21,7 +36,7 @@ final class StatusRow: NSView {
         valueField.alignment = .right
         valueField.lineBreakMode = .byTruncatingMiddle
         valueField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        [symbol, titleField, detailField, valueField].forEach {
+        [symbol, titleField, detailField, valueField, chevron].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false; addSubview($0)
         }
         NSLayoutConstraint.activate([
@@ -33,15 +48,44 @@ final class StatusRow: NSView {
             titleField.centerYAnchor.constraint(equalTo: centerYAnchor, constant: compact ? 0 : -8),
             titleField.widthAnchor.constraint(lessThanOrEqualToConstant: compact ? 78 : 145),
             detailField.leadingAnchor.constraint(equalTo: titleField.leadingAnchor),
-            detailField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
+            detailField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -10),
             detailField.topAnchor.constraint(equalTo: titleField.bottomAnchor, constant: 3),
             valueField.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: 10),
-            valueField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
-            valueField.centerYAnchor.constraint(equalTo: titleField.centerYAnchor)
+            valueField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -10),
+            valueField.centerYAnchor.constraint(equalTo: titleField.centerYAnchor),
+            chevron.widthAnchor.constraint(equalToConstant: 8),
+            chevron.heightAnchor.constraint(equalToConstant: 12),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
+            chevron.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
         detailField.isHidden = compact
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var acceptsFirstResponder: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTracking { removeTrackingArea(hoverTracking) }
+        let tracking = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(tracking); hoverTracking = tracking
+    }
+    override func mouseEntered(with event: NSEvent) { hover = isEnabled; needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { hover = false; needsDisplay = true }
+    override func draw(_ dirtyRect: NSRect) {
+        if hover || isHighlighted {
+            NSColor.labelColor.withAlphaComponent(isHighlighted ? 0.12 : 0.06).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 0, dy: 1), xRadius: 6, yRadius: 6).fill()
+        }
+        super.draw(dirtyRect)
+    }
+    func setNavigationEnabled(_ enabled: Bool) {
+        isEnabled = enabled
+        chevron.isHidden = !enabled
+        if !enabled { hover = false }
+        needsDisplay = true
+    }
+    @objc private func activateRow() { if isEnabled { onActivate?() } }
 
     func update(symbol name: String, title: String, detail: String = "", value: String = "", active: Bool = true) {
         symbol.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
@@ -52,20 +96,22 @@ final class StatusRow: NSView {
         valueField.stringValue = value
         toolTip = [title, value, detail].filter { !$0.isEmpty }.joined(separator: " · ")
         setAccessibilityElement(true)
-        setAccessibilityRole(.staticText)
+        setAccessibilityRole(isEnabled ? .button : .staticText)
         setAccessibilityLabel(toolTip)
-        [symbol, titleField, detailField, valueField].forEach { $0.setAccessibilityElement(false) }
+        setAccessibilityHelp(isEnabled ? "打开" + destination.title : nil)
+        [symbol, titleField, detailField, valueField, chevron].forEach { $0.setAccessibilityElement(false) }
     }
 }
 
 final class StatusPanel: NSView {
     static let panelSize = NSSize(width: 314, height: 312)
-    private let wifi = StatusRow(height: 55)
-    private let battery = StatusRow(height: 55)
-    private let vpn = StatusRow(height: 35, compact: true)
-    private let headphones = StatusRow(height: 35, compact: true)
-    private let sound = StatusRow(height: 35, compact: true)
-    private let focus = StatusRow(height: 35, compact: true)
+    var onOpenSettings: ((SystemSettings.Page) -> Void)?
+    private let wifi = StatusRow(height: 55, destination: .wifi)
+    private let battery = StatusRow(height: 55, destination: .battery)
+    private let vpn = StatusRow(height: 35, destination: .vpn, compact: true)
+    private let headphones = StatusRow(height: 35, destination: .soundOutput, compact: true)
+    private let sound = StatusRow(height: 35, destination: .sound, compact: true)
+    private let focus = StatusRow(height: 35, destination: .focus, compact: true)
     private let title = NSTextField(labelWithString: "DuoBar")
     private let mode = NSTextField(labelWithString: "此 Mac")
     override var allowsVibrancy: Bool { true }
@@ -93,12 +139,20 @@ final class StatusPanel: NSView {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 5)
         ])
+        for row in [wifi, battery, vpn, headphones, sound, focus] {
+            row.onActivate = { [weak self, weak row] in
+                guard let row else { return }
+                self?.onOpenSettings?(row.destination)
+            }
+        }
+        vpn.setNavigationEnabled(false)
         update(SystemStatus())
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(_ state: SystemStatus, preview: Bool = false) {
         mode.stringValue = preview ? "样例状态" : "此 Mac"
+        wifi.destination = state.wifi.route == .ethernet && !state.wifi.associated ? .network : .wifi
         wifi.update(symbol: state.wifi.symbol, title: state.wifi.route == .ethernet && !state.wifi.associated ? "以太网" : "Wi-Fi",
                     detail: state.wifi.title, value: state.wifi.associated ? state.wifi.signalQuality : "", active: state.wifi.associated || state.wifi.route == .ethernet)
         wifi.toolTip = state.wifi.detail

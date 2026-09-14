@@ -2,8 +2,12 @@ import AppKit
 
 /// Vector renderer shared by the menu item and its live settings icon.
 enum DuoIcon {
-    static let size = NSSize(width: 32, height: 26)
-    static let strokeWidth: CGFloat = 2.8
+    static let size = NSSize(width: 32, height: 28)
+    static let outerDiameter: CGFloat = 26
+    static let strokeWidth: CGFloat = 1.9
+    static let dotDiameter: CGFloat = 2.6
+    static let radius: CGFloat = (outerDiameter - strokeWidth) / 2
+    static let center = NSPoint(x: size.width / 2, y: size.height / 2)
 
     static func image(status: SystemStatus, layout: DotLayout = DotLayout(), template: Bool = true) -> NSImage {
         let image = NSImage(size: size, flipped: false) { rect in
@@ -19,13 +23,14 @@ enum DuoIcon {
     static func draw(status: SystemStatus, layout: DotLayout = DotLayout(), presentation: IconFrame? = nil, in rect: NSRect, color: NSColor, components: Components = .all) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.saveGState()
-        ctx.translateBy(x: rect.minX, y: rect.minY)
-        ctx.scaleBy(x: rect.width / size.width, y: rect.height / size.height)
+        let scale = min(rect.width / size.width, rect.height / size.height)
+        ctx.translateBy(x: rect.midX - size.width * scale / 2, y: rect.midY - size.height * scale / 2)
+        ctx.scaleBy(x: scale, y: scale)
         let dots = layout.visible
         let frame = presentation ?? .steady(status)
-        let strokeWidth = Self.strokeWidth + frame.chargePulse * 0.30
-        let center = NSPoint(x: 16, y: 13.0)
-        let radius: CGFloat = 10.3
+        let strokeWidth = Self.strokeWidth
+        let center = Self.center
+        let radius = Self.radius
         // The bottom dots and battery stroke share one circular path.
         let start: CGFloat = 210
         let sweep: CGFloat = -240
@@ -60,22 +65,22 @@ enum DuoIcon {
         }
         if let old = frame.previousWiFi, frame.wifiBlend < 1 {
             ctx.saveGState(); ctx.setAlpha(1-frame.wifiBlend)
-            drawWiFi(old, in: NSRect(x: 10.1, y: 10, width: 11.8, height: 8), color: color)
+            drawWiFi(old, in: NSRect(x: 10.1, y: 11, width: 11.8, height: 8), color: color)
             ctx.restoreGState()
         }
         ctx.saveGState(); ctx.setAlpha(frame.wifiBlend)
-        drawWiFi(status.wifi, in: NSRect(x: 10.1, y: 10, width: 11.8, height: 8), color: color)
+        drawWiFi(status.wifi, in: NSRect(x: 10.1, y: 11, width: 11.8, height: 8), color: color)
         ctx.restoreGState()
         if frame.charging > 0 {
             ctx.saveGState(); ctx.setAlpha(frame.charging)
-            drawSymbol("bolt.fill", in: NSRect(x: 21.0, y: 12.5, width: 3.5, height: 5.8), color: green)
+            drawSymbol("bolt.fill", in: NSRect(x: 21.0, y: 13.5, width: 3.5, height: 5.8), color: green)
             ctx.restoreGState()
         }
         // Equal-sized dots: only opacity changes with the state.
         if components == .all {
             for (index, glyph) in dots.enumerated() {
                 let active = frame.active[glyph] ?? 0
-                let diameter = strokeWidth
+                let diameter = Self.dotDiameter
                 color.withAlphaComponent(0.50 + 0.50*active).setFill()
                 let angle = (270 + (CGFloat(index) - CGFloat(dots.count - 1) / 2) * 20) * .pi / 180 + frame.ringAngle
                 let point = NSPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
