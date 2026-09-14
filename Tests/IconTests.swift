@@ -47,13 +47,17 @@ struct IconTests {
         let chargingImage = bitmap(chargingState)
         let green = chargingImage.colorAt(x: 160, y: 19)!.usingColorSpace(.deviceRGB)!
         check(green.greenComponent > green.redComponent + 0.3, "charging ring is visibly green")
+        var lowPower = chargingState; lowPower.battery.lowPowerMode = true
+        let yellow = bitmap(lowPower).colorAt(x: 160, y: 19)!.usingColorSpace(.deviceRGB)!
+        check(yellow.redComponent > 0.8 && yellow.greenComponent > 0.5 && yellow.blueComponent < 0.3,
+              "low power mode makes the preview ring yellow even while charging")
         var orbitFrame = IconFrame.steady(state)
         orbitFrame.ringAngle = -.pi/2
         let orbited = bitmap(state, frame: orbitFrame)
         check(alpha(orbited, x: 5.56, y: 20.03) > 0.9, "the first dot follows the same circular orbit as the battery ring")
         var uprightWiFi = true
-        for x in 112..<209 {
-            for y in 92..<179 {
+        for x in 96..<224 {
+            for y in 84..<184 {
                 if full.colorAt(x: x, y: y) != orbited.colorAt(x: x, y: y) { uprightWiFi = false }
             }
         }
@@ -76,13 +80,13 @@ struct IconTests {
         check(dotLayers.count == 4, "the live renderer has all four dots")
         check(abs(batteryLayer.path!.boundingBoxOfPath.width + batteryLayer.lineWidth - 26) < 0.01,
               "the live ring outer diameter is 26 points")
-        check(abs(batteryLayer.lineWidth - 1.9) < 0.001, "the live ring stroke is 1.9 points")
+        check(abs(batteryLayer.lineWidth - 2.47) < 0.001, "the live ring stroke is 2.47 points")
         check(2 * (DuoIcon.radius + DuoIcon.dotDiameter/2) < outer.bounds.height,
               "the complete rotating dot envelope fits without clipping")
         for dot in dotLayers {
             let shape = dot as! CAShapeLayer
-            check(abs(shape.path!.boundingBox.width - 2.6) < 0.001,
-                  "live dots measure 2.6 points")
+            check(abs(shape.path!.boundingBox.width - 3.12) < 0.001,
+                  "live dots measure 3.12 points")
         }
         view.update(inactive)
         check(dotLayers.allSatisfy { $0.opacity == 0.50 }, "inactive live dots remain visible")
@@ -109,6 +113,14 @@ struct IconTests {
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             check(sweep.animation(forKey: "charging") != nil, "connecting power adds a short sweep")
         }
+        powered.battery.lowPowerMode = true; view.update(powered)
+        let lowPowerRing = NSColor(cgColor: batteryLayer.strokeColor!)!.usingColorSpace(.deviceRGB)!
+        check(lowPowerRing.redComponent > 0.8 && lowPowerRing.greenComponent > 0.5 && lowPowerRing.blueComponent < 0.3,
+              "low power yellow overrides AC green in the live menu bar layer")
+        powered.battery.lowPowerMode = false; view.update(powered)
+        let restoredGreen = NSColor(cgColor: batteryLayer.strokeColor!)!.usingColorSpace(.deviceRGB)!
+        check(restoredGreen.greenComponent > restoredGreen.redComponent + 0.3,
+              "leaving low power mode restores AC green")
         powered.battery.charging = true; view.update(powered)
         powered.battery.externalPower = false; powered.battery.charging = false; view.update(powered)
         check(sweep.animation(forKey: "charging") == nil, "unplugging cancels the charging sweep")

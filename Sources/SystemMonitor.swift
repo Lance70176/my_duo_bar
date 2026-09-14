@@ -62,6 +62,8 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         listen(system, SystemReaders.address(kAudioHardwarePropertyDevices))
         listen(system, SystemReaders.address(kAudioHardwarePropertyDefaultOutputDevice))
         bindOutput()
+        observers.append(NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange,
+            object: nil, queue: .main) { [weak self] _ in self?.refresh() })
         let nc = NSWorkspace.shared.notificationCenter
         observers.append(nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             self?.sleeping = true; self?.timer?.invalidate(); self?.focusTimer?.invalidate()
@@ -182,6 +184,7 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         }
         focusObservation?.invalidate()
         observers.forEach {
+            NotificationCenter.default.removeObserver($0)
             NSWorkspace.shared.notificationCenter.removeObserver($0)
             DistributedNotificationCenter.default().removeObserver($0)
         }

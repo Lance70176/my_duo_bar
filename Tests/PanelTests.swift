@@ -26,7 +26,7 @@ import AppKit
                   "the whole row, including its labels, is clickable")
             row.performClick(nil)
         }
-        check(opened == [.wifi, .battery, .soundOutput, .sound, .focus],
+        check(opened == [.wifi, .battery, .bluetooth, .sound, .focus],
               "actionable rows open their settings and VPN stays read-only")
         var wired = SystemStatus(); wired.wifi.route = .ethernet
         panel.update(wired); rows[0].performClick(nil)
@@ -34,7 +34,7 @@ import AppKit
         var wireless = wired; wireless.wifi.associated = true
         panel.update(wireless); rows[0].performClick(nil)
         check(opened.last == .wifi, "an associated Wi-Fi connection opens Wi-Fi settings")
-        check(SystemSettings.Page.soundOutput.url.query == "output", "headphones target sound output")
+        check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "headphones target Bluetooth settings")
         check(SystemSettings.Page.allCases.allSatisfy { $0.url.scheme == "x-apple.systempreferences" },
               "settings links stay within the system settings application")
         print("PASS: five native settings actions, read-only VPN, accessibility and network routing")

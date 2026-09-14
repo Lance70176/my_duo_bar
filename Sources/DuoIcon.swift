@@ -4,8 +4,8 @@ import AppKit
 enum DuoIcon {
     static let size = NSSize(width: 32, height: 28)
     static let outerDiameter: CGFloat = 26
-    static let strokeWidth: CGFloat = 1.9
-    static let dotDiameter: CGFloat = 2.6
+    static let strokeWidth: CGFloat = 2.47
+    static let dotDiameter: CGFloat = 3.12
     static let radius: CGFloat = (outerDiameter - strokeWidth) / 2
     static let center = NSPoint(x: size.width / 2, y: size.height / 2)
 
@@ -14,7 +14,7 @@ enum DuoIcon {
             draw(status: status, layout: layout, in: rect, color: .black)
             return true
         }
-        image.isTemplate = template && !status.battery.connectedToPower
+        image.isTemplate = template && !status.battery.connectedToPower && !status.battery.lowPowerMode
         return image
     }
 
@@ -36,7 +36,7 @@ enum DuoIcon {
         let sweep: CGFloat = -240
         let base = color.usingColorSpace(.deviceRGB) ?? color
         let green = NSColor(calibratedRed: 0.18, green: 0.80, blue: 0.38, alpha: 1)
-        let ringColor = base.blended(withFraction: frame.charging, of: green) ?? green
+        let ringColor = status.battery.lowPowerMode ? NSColor.systemYellow : (base.blended(withFraction: frame.charging, of: green) ?? green)
         if components == .all {
             ctx.saveGState()
             ctx.translateBy(x: center.x, y: center.y); ctx.rotate(by: frame.ringAngle)
@@ -57,7 +57,7 @@ enum DuoIcon {
                 let length = sweep * percent / 100
                 let end = start + length * phase
                 let path = NSBezierPath(); path.lineWidth = strokeWidth; path.lineCapStyle = .round
-                green.blended(withFraction: 0.7, of: .white)?.withAlphaComponent(sin(.pi*phase)*0.8).setStroke()
+                ringColor.blended(withFraction: 0.7, of: .white)?.withAlphaComponent(sin(.pi*phase)*0.8).setStroke()
                 path.appendArc(withCenter: center, radius: radius, startAngle: min(start, end+22), endAngle: end, clockwise: true)
                 path.stroke()
             }
@@ -87,6 +87,12 @@ enum DuoIcon {
     }
 
     private static func drawWiFi(_ wifi: WiFiState, in rect: NSRect, color: NSColor) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.translateBy(x: rect.midX, y: rect.midY)
+        context.scaleBy(x: 1.15, y: 1.15)
+        context.translateBy(x: -rect.midX, y: -rect.midY)
         guard wifi.associated || wifi.route != .ethernet else {
             drawSymbol("network", in: rect, color: color); return
         }

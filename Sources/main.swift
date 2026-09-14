@@ -106,8 +106,9 @@ if CommandLine.arguments.contains("--diagnose") {
     let report: [String: Any] = [
         "batteryPresent": status.battery.present,
         "batteryCharging": status.battery.charging,
+        "lowPowerMode": status.battery.lowPowerMode,
         "externalPower": status.battery.externalPower,
-        "powerRingGreen": status.battery.connectedToPower,
+        "powerRingGreen": status.battery.connectedToPower && !status.battery.lowPowerMode,
         "batteryPercent": status.battery.percent as Any? ?? NSNull(),
         "wifiAssociated": status.wifi.associated,
         "wifiNameAvailable": status.wifi.ssid != nil,

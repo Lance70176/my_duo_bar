@@ -25,6 +25,7 @@ struct BatteryState: Equatable {
     var charging = false
     var externalPower = false
     var minutesRemaining: Int?
+    var lowPowerMode = false
     // AC can be connected before the battery starts charging, or while charging is paused.
     var connectedToPower: Bool { present && (externalPower || charging) }
     var title: String { percent.map { "\($0)%" } ?? (present ? "读取中" : "外接电源") }

@@ -66,12 +66,12 @@ final class StatusIconView: NSView {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let color = NSColor.labelColor.usingColorSpace(.deviceRGB) ?? .black
             let green = NSColor(calibratedRed: 0.18, green: 0.80, blue: 0.38, alpha: 1)
-            let ring = value.battery.connectedToPower ? green : color
+            let ring = value.battery.lowPowerMode ? NSColor.systemYellow : (value.battery.connectedToPower ? green : color)
             CATransaction.begin(); CATransaction.setDisableActions(true)
             transition(track, "strokeColor", to: ring.withAlphaComponent(0.20).cgColor, animated: animated)
             transition(battery, "strokeColor", to: ring.cgColor, animated: animated)
             transition(battery, "strokeEnd", to: CGFloat(value.battery.percent ?? 0)/100, animated: animated)
-            sweep.strokeColor = green.blended(withFraction: 0.7, of: .white)?.cgColor
+            sweep.strokeColor = ring.blended(withFraction: 0.7, of: .white)?.cgColor
             let visible = dotLayout.visible
             for (index, dot) in dots.enumerated() {
                 dot.isHidden = index >= visible.count

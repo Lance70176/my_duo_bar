@@ -109,7 +109,7 @@ final class StatusPanel: NSView {
     private let wifi = StatusRow(height: 55, destination: .wifi)
     private let battery = StatusRow(height: 55, destination: .battery)
     private let vpn = StatusRow(height: 35, destination: .vpn, compact: true)
-    private let headphones = StatusRow(height: 35, destination: .soundOutput, compact: true)
+    private let headphones = StatusRow(height: 35, destination: .bluetooth, compact: true)
     private let sound = StatusRow(height: 35, destination: .sound, compact: true)
     private let focus = StatusRow(height: 35, destination: .focus, compact: true)
     private let title = NSTextField(labelWithString: "DuoBar")

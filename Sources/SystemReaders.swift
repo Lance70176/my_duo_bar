@@ -24,7 +24,8 @@ enum SystemReaders {
             return BatteryState(present: true, percent: percent,
                 charging: d[kIOPSIsChargingKey] as? Bool ?? false,
                 externalPower: d[kIOPSPowerSourceStateKey] as? String == kIOPSACPowerValue,
-                minutesRemaining: d[kIOPSTimeToEmptyKey] as? Int)
+                minutesRemaining: d[kIOPSTimeToEmptyKey] as? Int,
+                lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled)
         }
         return BatteryState()
     }
