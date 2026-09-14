@@ -14,6 +14,7 @@ final class SystemMonitor: NSObject, CWEventDelegate {
     private let path = NWPathMonitor()
     private var route: NetworkLink = .unknown
     private var timer: Timer?
+    private var focusTimer: Timer?
     private var powerSource: CFRunLoopSource?
     private var dynamicStore: SCDynamicStore?
     private var observers: [NSObjectProtocol] = []
@@ -63,13 +64,13 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         bindOutput()
         let nc = NSWorkspace.shared.notificationCenter
         observers.append(nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.sleeping = true; self?.timer?.invalidate()
+            self?.sleeping = true; self?.timer?.invalidate(); self?.focusTimer?.invalidate()
         })
         observers.append(nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.sleeping = false; self?.resetTimer(); self?.refresh()
         })
         focusObservation = INFocusStatusCenter.default.observe(\.focusStatus, options: [.new]) { [weak self] _, _ in
-            self?.refresh()
+            self?.refreshFocus()
         }
         resetTimer()
         refresh()
@@ -83,12 +84,31 @@ final class SystemMonitor: NSObject, CWEventDelegate {
 
     private func resetTimer() {
         timer?.invalidate()
+        focusTimer?.invalidate()
         guard !sleeping else { return }
         let interval: TimeInterval = menuOpen ? 3 : 30
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.refresh() }
         timer.tolerance = menuOpen ? 0.5 : 8
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+        // Supplement Focus notifications without re-reading audio and networking.
+        let focusTimer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in self?.refreshFocus() }
+        focusTimer.tolerance = 0.25
+        RunLoop.main.add(focusTimer, forMode: .common)
+        self.focusTimer = focusTimer
+    }
+
+    private func refreshFocus() {
+        guard Thread.isMainThread else { DispatchQueue.main.async { self.refreshFocus() }; return }
+        guard !sleeping else { return }
+        worker.async { [weak self] in
+            let focus = SystemReaders.focus()
+            DispatchQueue.main.async {
+                guard let self, !self.sleeping, self.status.focus != focus else { return }
+                self.status.focus = focus
+                self.onChange?(self.status)
+            }
+        }
     }
 
     func refresh() {
@@ -151,6 +171,7 @@ final class SystemMonitor: NSObject, CWEventDelegate {
 
     func stop() {
         timer?.invalidate()
+        focusTimer?.invalidate()
         path.cancel()
         try? wifi.stopMonitoringAllEvents()
         if let powerSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSource, .commonModes) }

@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import Intents
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var item: NSStatusItem!
@@ -7,7 +8,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let panel = StatusPanel()
     private let monitor = SystemMonitor()
     private let preferences = DotPreferences()
-    private let motion = IconMotion()
     private let canvas = StatusIconView()
     private var settings: SettingsController?
 
@@ -32,9 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let quit = NSMenuItem(title: "退出 DuoBar", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self; menu.addItem(quit)
         item.menu = menu
-        motion.onFrame = { [weak self] in self?.renderIcon() }
         monitor.onChange = { [weak self] state in
-            self?.motion.update(state)
             self?.update(state)
         }
         preferences.onChange = { [weak self] in
@@ -47,6 +45,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if firstLaunch { UserDefaults.standard.set(true, forKey: "hasShownSetup") }
         if firstLaunch || CommandLine.arguments.contains("--settings") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showSettings() }
+        }
+        if CommandLine.arguments.contains("--request-focus") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                INFocusStatusCenter.default.requestAuthorization { [weak self] _ in
+                    DispatchQueue.main.async { self?.monitor.refresh() }
+                }
+            }
         }
         if CommandLine.arguments.contains("--open-menu") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.item.button?.performClick(nil) }
@@ -63,14 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panel.update(state)
         settings?.update(state)
     }
-    func menuWillOpen(_ menu: NSMenu) { monitor.setMenuOpen(true) }
+    func menuWillOpen(_ menu: NSMenu) {
+        canvas.animateTurn()
+        panel.update(monitor.status)
+        monitor.setMenuOpen(true)
+    }
     func menuDidClose(_ menu: NSMenu) { monitor.setMenuOpen(false) }
 
     private func renderIcon() {
-        canvas.status = monitor.status
-        canvas.dotLayout = preferences.layout
-        canvas.presentation = motion.frame
-        canvas.needsDisplay = true
+        canvas.update(monitor.status, layout: preferences.layout)
     }
 
     @objc private func showSettings() {
@@ -83,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func openSystemIcons() { SystemSettings.open("menubar") }
     @objc private func quitApp() { NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { motion.stop(); monitor.stop() }
+    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop() }
 }
 
 if CommandLine.arguments.contains("--diagnose") {
@@ -106,6 +112,8 @@ if CommandLine.arguments.contains("--diagnose") {
         "muteAvailable": status.audio.muted != nil,
         "muted": status.audio.muted as Any? ?? NSNull(),
         "focus": status.focus.title,
+        "focusAuthorization": INFocusStatusCenter.default.authorizationStatus.rawValue,
+        "focusSharedValue": INFocusStatusCenter.default.focusStatus.isFocused as Any? ?? NSNull(),
         "activeGlyphCount": status.glyphs.count,
         "loginItemStatus": SMAppService.mainApp.status.rawValue
     ]

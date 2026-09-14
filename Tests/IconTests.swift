@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 @main
 struct IconTests {
@@ -58,69 +59,56 @@ struct IconTests {
         }
         check(uprightWiFi, "Wi-Fi pixels remain upright while the outer circle turns")
         check(IconTurn.angle(at: 0) == 0, "the turn begins without a jump")
-        check(IconTurn.angle(at: 0.9) < -2 * .pi, "the GIF curve includes a small overshoot")
+        check(IconTurn.angle(at: 1.07) < -2 * .pi, "the GIF curve includes a small overshoot")
         check(abs(IconTurn.angle(at: IconTurn.duration) + 2 * .pi) < 0.00001, "the turn settles at one complete revolution")
-        let motion = IconMotion()
-        var frames = 0
-        motion.onFrame = { frames += 1 }
-        motion.update(state)
-        var changed = state; changed.audio.muted = false
-        motion.update(changed)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.16))
-        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            check(motion.frame.ringAngle < 0, "the outer circle turns clockwise")
-            let before = motion.frame.ringAngle
-            changed.battery.percent = 99
-            motion.update(changed)
-            check(motion.frame.ringAngle == before, "a battery update does not jump or restart the orbit")
+        let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: 36, height: 26),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        let view = StatusIconView(frame: NSRect(x: 0, y: 0, width: 36, height: 26))
+        window.contentView = view; window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        view.update(state); view.layoutSubtreeIfNeeded()
+        let outer = view.layer!.sublayers![0]
+        let center = view.layer!.sublayers![1]
+        let batteryLayer = outer.sublayers![1] as! CAShapeLayer
+        let sweep = outer.sublayers![2]
+        let dotLayers = Array(outer.sublayers!.dropFirst(3))
+        check(outer.animationKeys() == nil, "first sample stays still")
+        check(dotLayers.count == 4, "the live renderer has all four dots")
+        for dot in dotLayers {
+            let shape = dot as! CAShapeLayer
+            check(abs(shape.path!.boundingBox.width - batteryLayer.lineWidth) < 0.001,
+                  "live dot diameter equals live ring width")
         }
-        RunLoop.current.run(until: Date().addingTimeInterval(1.22))
-        check(motion.frame.ringAngle == 0, "the outer circle returns to its original orientation")
-        check(motion.frame.active[.mute] == 0, "changed dot reaches its new opacity")
-        chargingState = changed; chargingState.battery.charging = true
-        motion.update(chargingState)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.12))
+        view.update(inactive)
+        check(dotLayers.allSatisfy { $0.opacity == 0.50 }, "inactive live dots remain visible")
+        check(dotLayers[3].opacity == 0.50, "Focus off dims the correct dot")
+        var focused = inactive; focused.focus = .active
+        view.update(focused)
+        check(dotLayers[3].opacity == 1, "Focus on lights the real fourth layer")
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            check(motion.frame.charging > 0 && motion.frame.charging < 1, "charging color transitions gradually")
-            check(motion.frame.chargeSweep != nil, "connecting power produces one short sweep")
+            check(outer.animation(forKey: "turn") is CAKeyframeAnimation, "a status event starts a composited turn")
+            check(center.animation(forKey: "turn") == nil, "Wi-Fi stays upright")
+            CATransaction.flush()
+            let before = outer.animation(forKey: "turn")!.beginTime
+            var batteryChange = focused; batteryChange.battery.percent = 99
+            view.update(batteryChange); view.animateTurn()
+            check(outer.animation(forKey: "turn")!.beginTime == before,
+                  "battery updates and clicks do not restart an existing turn")
+            view.stopAnimations(); view.animateTurn()
+            check(outer.animation(forKey: "turn") != nil, "clicking the menu starts a fresh turn when idle")
         }
-        RunLoop.current.run(until: Date().addingTimeInterval(1.05))
-        check(motion.frame.charging == 1 && motion.frame.chargeSweep == nil && motion.frame.chargePulse == 0,
-              "charging settles to a static green ring")
-        // Actual power connection often arrives before IsCharging, followed by new readings.
-        motion.update(changed)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.55))
-        var connected = changed
-        connected.battery.externalPower = true
-        connected.battery.charging = false
-        motion.update(connected)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.14))
+        var powered = focused; powered.battery.externalPower = true; powered.battery.charging = false
+        view.update(powered)
+        let ringColor = NSColor(cgColor: batteryLayer.strokeColor!)!.usingColorSpace(.deviceRGB)!
+        check(ringColor.greenComponent > ringColor.redComponent + 0.3, "AC power colors the live ring green before charging starts")
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            check(motion.frame.chargeSweep != nil, "AC connection animates before IsCharging becomes true")
+            check(sweep.animation(forKey: "charging") != nil, "connecting power adds a short sweep")
         }
-        connected.battery.percent = 98
-        connected.wifi.ssid = "Changed during charging"
-        motion.update(connected)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.12))
-        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            check((motion.frame.chargeSweep ?? 0) > 0.18, "follow-up battery and Wi-Fi events preserve the connection animation")
-        }
-        connected.battery.charging = true
-        motion.update(connected)
-        RunLoop.current.run(until: Date().addingTimeInterval(1.25))
-        check(motion.frame.charging == 1 && motion.frame.chargeSweep == nil, "connected power stays green after the transition")
-        connected.battery.charging = false
-        motion.update(connected)
-        check(motion.frame.charging == 1, "charging pause while on AC keeps the ring green")
-        var disconnected = connected
-        disconnected.battery.externalPower = false
-        disconnected.battery.charging = false
-        motion.update(disconnected)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.55))
-        check(motion.frame.charging == 0, "disconnecting power returns to the normal ring")
-        let finishedCount = frames
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
-        check(frames == finishedCount, "no idle animation frames remain")
-        print("PASS: battery direction, equal dots, joined orbit and charging transitions (\(frames) frames)")
+        powered.battery.charging = true; view.update(powered)
+        powered.battery.externalPower = false; powered.battery.charging = false; view.update(powered)
+        check(sweep.animation(forKey: "charging") == nil, "unplugging cancels the charging sweep")
+        view.stopAnimations()
+        check(outer.animationKeys() == nil && center.animationKeys() == nil, "stopping removes all live animations")
+        print("PASS: vector rendering, live layer states, menu click, coalesced orbit and charging")
     }
 }

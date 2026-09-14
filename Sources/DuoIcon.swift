@@ -14,7 +14,9 @@ enum DuoIcon {
         return image
     }
 
-    static func draw(status: SystemStatus, layout: DotLayout = DotLayout(), presentation: IconFrame? = nil, in rect: NSRect, color: NSColor) {
+    enum Components { case all, center }
+
+    static func draw(status: SystemStatus, layout: DotLayout = DotLayout(), presentation: IconFrame? = nil, in rect: NSRect, color: NSColor, components: Components = .all) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.saveGState()
         ctx.translateBy(x: rect.minX, y: rect.minY)
@@ -30,30 +32,32 @@ enum DuoIcon {
         let base = color.usingColorSpace(.deviceRGB) ?? color
         let green = NSColor(calibratedRed: 0.18, green: 0.80, blue: 0.38, alpha: 1)
         let ringColor = base.blended(withFraction: frame.charging, of: green) ?? green
-        ctx.saveGState()
-        ctx.translateBy(x: center.x, y: center.y); ctx.rotate(by: frame.ringAngle)
-        ctx.translateBy(x: -center.x, y: -center.y)
-        func arc(_ fraction: CGFloat, alpha: CGFloat) {
-            guard fraction > 0 else { return }
-            ringColor.withAlphaComponent(alpha).setStroke()
-            let path = NSBezierPath()
-            path.lineWidth = strokeWidth
-            path.lineCapStyle = .round
-            path.appendArc(withCenter: center, radius: radius, startAngle: start,
-                           endAngle: start + sweep * fraction, clockwise: true)
-            path.stroke()
+        if components == .all {
+            ctx.saveGState()
+            ctx.translateBy(x: center.x, y: center.y); ctx.rotate(by: frame.ringAngle)
+            ctx.translateBy(x: -center.x, y: -center.y)
+            func arc(_ fraction: CGFloat, alpha: CGFloat) {
+                guard fraction > 0 else { return }
+                ringColor.withAlphaComponent(alpha).setStroke()
+                let path = NSBezierPath()
+                path.lineWidth = strokeWidth
+                path.lineCapStyle = .round
+                path.appendArc(withCenter: center, radius: radius, startAngle: start,
+                               endAngle: start + sweep * fraction, clockwise: true)
+                path.stroke()
+            }
+            arc(1, alpha: 0.20)
+            if let percent = frame.percent { arc(percent / 100, alpha: 1) }
+            if let phase = frame.chargeSweep, let percent = frame.percent {
+                let length = sweep * percent / 100
+                let end = start + length * phase
+                let path = NSBezierPath(); path.lineWidth = strokeWidth; path.lineCapStyle = .round
+                green.blended(withFraction: 0.7, of: .white)?.withAlphaComponent(sin(.pi*phase)*0.8).setStroke()
+                path.appendArc(withCenter: center, radius: radius, startAngle: min(start, end+22), endAngle: end, clockwise: true)
+                path.stroke()
+            }
+            ctx.restoreGState()
         }
-        arc(1, alpha: 0.20)
-        if let percent = frame.percent { arc(percent / 100, alpha: 1) }
-        if let phase = frame.chargeSweep, let percent = frame.percent {
-            let length = sweep * percent / 100
-            let end = start + length * phase
-            let path = NSBezierPath(); path.lineWidth = strokeWidth; path.lineCapStyle = .round
-            green.blended(withFraction: 0.7, of: .white)?.withAlphaComponent(sin(.pi*phase)*0.8).setStroke()
-            path.appendArc(withCenter: center, radius: radius, startAngle: min(start, end+22), endAngle: end, clockwise: true)
-            path.stroke()
-        }
-        ctx.restoreGState()
         if let old = frame.previousWiFi, frame.wifiBlend < 1 {
             ctx.saveGState(); ctx.setAlpha(1-frame.wifiBlend)
             drawWiFi(old, in: NSRect(x: 10.1, y: 10, width: 11.8, height: 8), color: color)
@@ -68,14 +72,16 @@ enum DuoIcon {
             ctx.restoreGState()
         }
         // Equal-sized dots: only opacity changes with the state.
-        for (index, glyph) in dots.enumerated() {
-            let active = frame.active[glyph] ?? 0
-            let diameter = strokeWidth
-            color.withAlphaComponent(0.50 + 0.50*active).setFill()
-            let angle = (270 + (CGFloat(index) - CGFloat(dots.count - 1) / 2) * 20) * .pi / 180 + frame.ringAngle
-            let point = NSPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
-            NSBezierPath(ovalIn: NSRect(x: point.x - diameter / 2, y: point.y - diameter / 2,
-                                       width: diameter, height: diameter)).fill()
+        if components == .all {
+            for (index, glyph) in dots.enumerated() {
+                let active = frame.active[glyph] ?? 0
+                let diameter = strokeWidth
+                color.withAlphaComponent(0.50 + 0.50*active).setFill()
+                let angle = (270 + (CGFloat(index) - CGFloat(dots.count - 1) / 2) * 20) * .pi / 180 + frame.ringAngle
+                let point = NSPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
+                NSBezierPath(ovalIn: NSRect(x: point.x - diameter / 2, y: point.y - diameter / 2,
+                                           width: diameter, height: diameter)).fill()
+            }
         }
         ctx.restoreGState()
     }
@@ -129,18 +135,5 @@ enum DuoIcon {
             return true
         }
         tinted.draw(in: target)
-    }
-}
-
-/// Inherits the status button's appearance while preserving the ring's real color.
-final class StatusIconView: NSView {
-    var status = SystemStatus()
-    var dotLayout = DotLayout()
-    var presentation = IconFrame.steady(SystemStatus())
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    override func viewDidChangeEffectiveAppearance() { needsDisplay = true }
-    override func draw(_ dirtyRect: NSRect) {
-        let rect = NSRect(x: bounds.midX-16, y: bounds.midY-13, width: 32, height: 26)
-        DuoIcon.draw(status: status, layout: dotLayout, presentation: presentation, in: rect, color: .labelColor)
     }
 }

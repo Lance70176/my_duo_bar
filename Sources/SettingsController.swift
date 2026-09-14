@@ -95,7 +95,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         stack.addArrangedSubview(contactRow("小红书：", title: "一键前往", action: #selector(openXiaohongshu)))
         stack.addArrangedSubview(contactRow("微信：", title: "nybbamboo", action: #selector(copyWeChat), feedback: wechatCopied))
         stack.addArrangedSubview(contactRow("邮箱：", title: "nybbamboo@163.com", action: #selector(copyEmail), feedback: emailCopied))
-        stack.addArrangedSubview(note("0.1.3 · 本地运行"))
+        stack.addArrangedSubview(note("0.1.4 · 本地运行"))
     }
 
     private func contactRow(_ label: String, title: String, action: Selector, feedback: NSTextField? = nil) -> NSStackView {
@@ -180,7 +180,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.layout = preferences.layout
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         switch status.focus {
-        case .unavailable: focusStatus.stringValue = "允许系统共享专注状态后，专注圆点会随状态点亮。"
+        case .unavailable: focusStatus.stringValue = "点击下方按钮并在系统弹窗中允许读取。还需在系统设置中开启“共享专注状态”。"
         default: focusStatus.stringValue = "专注状态可读 · " + status.focus.title
         }
     }
@@ -226,7 +226,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         if center.authorizationStatus == .denied || center.authorizationStatus == .restricted {
             let alert = NSAlert()
             alert.messageText = "专注状态尚未共享"
-            alert.informativeText = "请在系统设置 → 专注模式 → 专注状态中允许共享状态。DuoBar 只读取是否专注，开启时点亮圆点。"
+            alert.informativeText = "请在系统设置中允许 DuoBar 读取专注状态，并在专注模式 → 专注状态中开启共享。DuoBar 只读取是否专注，开启时点亮圆点。"
             alert.addButton(withTitle: "打开专注设置")
             alert.addButton(withTitle: "稍后")
             if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open("focus") }
