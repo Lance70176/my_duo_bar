@@ -71,11 +71,6 @@ enum DuoIcon {
         ctx.saveGState(); ctx.setAlpha(frame.wifiBlend)
         drawWiFi(status.wifi, in: NSRect(x: 10.1, y: 11, width: 11.8, height: 8), color: color)
         ctx.restoreGState()
-        if frame.charging > 0 {
-            ctx.saveGState(); ctx.setAlpha(frame.charging)
-            drawSymbol("bolt.fill", in: NSRect(x: 21.0, y: 13.5, width: 3.5, height: 5.8), color: green)
-            ctx.restoreGState()
-        }
         // Equal-sized dots: only opacity changes with the state.
         if components == .all {
             for (index, glyph) in dots.enumerated() {

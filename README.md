@@ -8,7 +8,7 @@
 
 ## 安装
 
-下载 Release 中的 `DuoBar-0.1.5-universal.dmg`，打开后把 **DuoBar.app 拖进 Applications**，再从“应用程序”中启动。也可以下载 ZIP，解压后把应用移到“应用程序”。
+下载 Release 中的 `DuoBar-0.1.6-universal.dmg`，打开后把 **DuoBar.app 拖进 Applications**，再从“应用程序”中启动。也可以下载 ZIP，解压后把应用移到“应用程序”。
 
 安装包包含 Apple Silicon 和 Intel 两种架构，要求 macOS 13 或更新版本。Apple Silicon 已实机验证，Intel 已完成编译与架构检查，尚未在 Intel 真机验收。
 
@@ -66,8 +66,8 @@
 ```
 
 - 应用：`build/DuoBar.app`
-- 安装磁盘：`dist/DuoBar-0.1.5-universal.dmg`
-- 压缩包：`dist/DuoBar-0.1.5-universal.zip`
+- 安装磁盘：`dist/DuoBar-0.1.6-universal.dmg`
+- 压缩包：`dist/DuoBar-0.1.6-universal.zip`
 
 74 项状态检查覆盖组合、未知状态、显示偏好保存、Wi-Fi 文案、VPN 路由和动画触发。AppKit 检查验证电量方向、圆点大小、真实图层的状态变化、点击动画、连续更新不中断旋转和充电过渡。GitHub Actions 自动运行检查并构建两种架构。
 
