@@ -102,6 +102,16 @@ import Foundation
         check(AudioState().muted == nil, "unsupported mute state is not fabricated")
         check(BatteryState(present: true, percent: 50, minutesRemaining: 125).detail == "電池供電 · 約 2 小時 5 分鐘",
               "Traditional Chinese battery estimate")
+        check(BatteryState(present: true, percent: 87, externalPower: true, chargeLimit: 80).detail == "已充電到 80% 上限"
+              && BatteryState(present: true, percent: 60, charging: true, externalPower: true, chargeLimit: 80).detail == "正在充電到 80% 上限"
+              && BatteryState(present: true, percent: 60, externalPower: true, chargeLimit: 80).detail == "已接上電源 · 未充電"
+              && BatteryState(present: true, percent: 100, externalPower: true, chargeLimit: 80).detail == "電量已充滿"
+              && BatteryState(present: true, percent: 87, externalPower: true).detail == "已接上電源 · 未充電",
+              "the charge limit shows in the battery detail once the battery has reached it")
+        check(ChargeLimitState(supported: true, enabled: true, limit: 80).activeLimit == 80
+              && ChargeLimitState(supported: true, enabled: false, limit: 100).activeLimit == nil
+              && ChargeLimitState(supported: false, enabled: true, limit: 80).activeLimit == nil,
+              "the active limit needs support and an enabled limit below 100")
 
         L10n.overrideForTesting(.en)
         check(wifi.signalQuality == "Strong Signal", "English signal wording")
@@ -109,6 +119,7 @@ import Foundation
         check(BatteryState().title == "External Power", "English desktop power")
         check(BatteryState(present: true, percent: 50, minutesRemaining: 125).detail == "On Battery · About 2 hr 5 min",
               "English battery estimate")
+        check(BatteryState(present: true, percent: 87, externalPower: true, chargeLimit: 80).detail == "Charged to 80% Limit", "English charge limit")
         var english = SystemStatus(); english.vpn.names = ["B", "A"]
         check(english.vpn.title == "B, A", "English list separator")
         check(StatusGlyph.focus.title == "Focus" && FocusState.off.title == "Off", "English dot and Focus titles")
@@ -116,6 +127,7 @@ import Foundation
         L10n.overrideForTesting(.ja)
         check(wifi.signalQuality == "電波良好", "Japanese signal wording")
         check(BatteryState().title == "外部電源", "Japanese desktop power")
+        check(BatteryState(present: true, percent: 87, externalPower: true, chargeLimit: 80).detail == "上限 80% まで充電済み", "Japanese charge limit")
         check(StatusGlyph.focus.title == "集中モード" && FocusState.active.title == "オン", "Japanese dot and Focus titles")
         check(AudioState(muted: true).soundTitle == "消音中", "Japanese mute wording")
 

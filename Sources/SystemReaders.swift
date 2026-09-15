@@ -26,7 +26,8 @@ enum SystemReaders {
                 charging: d[kIOPSIsChargingKey] as? Bool ?? false,
                 externalPower: d[kIOPSPowerSourceStateKey] as? String == kIOPSACPowerValue,
                 minutesRemaining: d[kIOPSTimeToEmptyKey] as? Int,
-                lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled)
+                lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
+                chargeLimit: ChargeLimitService.read().activeLimit)
         }
         return BatteryState()
     }

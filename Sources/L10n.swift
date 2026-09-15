@@ -116,6 +116,19 @@ enum L10n {
     }
     static var battery: String { pick("電池", "Battery", "バッテリー") }
     static func batteryLevel(_ value: String) -> String { pick("電量 \(value)", "Battery \(value)", "バッテリー \(value)") }
+    static func chargingToLimit(_ limit: Int) -> String { pick("正在充電到 \(limit)% 上限", "Charging to \(limit)% Limit", "上限 \(limit)% まで充電中") }
+    static func chargedToLimit(_ limit: Int) -> String { pick("已充電到 \(limit)% 上限", "Charged to \(limit)% Limit", "上限 \(limit)% まで充電済み") }
+
+    // MARK: Battery submenu
+    static var chargeLimit: String { pick("充電上限", "Charge Limit", "充電上限") }
+    static func chargeLimitOn(_ limit: Int) -> String { pick("充到 \(limit)% 就停止充電", "Stops charging at \(limit)%", "\(limit)% で充電を停止") }
+    static var chargeLimitOff: String { pick("未限制，會充到 100%", "Off · Charges to 100%", "制限なし · 100% まで充電") }
+    static var chargeLimitUnsupported: String {
+        pick("此 Mac 或此版 macOS 不提供充電上限", "Not available on this Mac or macOS version", "この Mac または macOS では利用できません")
+    }
+    static func chargeLimitLevel(_ limit: Int) -> String { pick("停在 \(limit)%", "Stop at \(limit)%", "\(limit)% で停止") }
+    static var chargeLimitToggle: String { pick("切換充電上限", "Turn the charge limit on or off", "充電上限を切り替え") }
+    static var batterySettingsMenu: String { pick("電池設定…", "Battery Settings…", "バッテリー設定…") }
 
     // MARK: Network
     static var wifiConnected: String { pick("已連線 Wi-Fi", "Connected to Wi-Fi", "Wi-Fi に接続済み") }

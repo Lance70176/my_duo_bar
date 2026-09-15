@@ -26,13 +26,19 @@ struct BatteryState: Equatable {
     var externalPower = false
     var minutesRemaining: Int?
     var lowPowerMode = false
+    /// The system charge limit in effect (System Settings → Battery), or nil when it is off or unavailable.
+    var chargeLimit: Int?
     // AC can be connected before the battery starts charging, or while charging is paused.
     var connectedToPower: Bool { present && (externalPower || charging) }
     var title: String { percent.map { "\($0)%" } ?? (present ? L10n.reading : L10n.externalPower) }
     var detail: String {
         if !present { return L10n.noInternalBattery }
-        if charging { return L10n.charging }
-        if externalPower { return percent == 100 ? L10n.fullyCharged : L10n.pluggedInNotCharging }
+        if charging { return chargeLimit.map(L10n.chargingToLimit) ?? L10n.charging }
+        if externalPower {
+            if percent == 100 { return L10n.fullyCharged }
+            if let chargeLimit, let percent, percent >= chargeLimit { return L10n.chargedToLimit(chargeLimit) }
+            return L10n.pluggedInNotCharging
+        }
         if let minutesRemaining, minutesRemaining > 0 {
             return L10n.onBattery(hours: minutesRemaining / 60, minutes: minutesRemaining % 60)
         }

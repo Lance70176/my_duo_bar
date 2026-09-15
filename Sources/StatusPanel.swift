@@ -130,63 +130,33 @@ final class StatusPanelHeader: NSView {
     func update(preview: Bool = false) { mode.stringValue = preview ? L10n.sampleStatus : L10n.thisMac }
 }
 
-/// A block of status rows. Wi-Fi, VPN, Headphones and Sound are native menu items so they can open submenus:
-/// `.power` is the battery row plus the divider under it, `.focus` is the Focus row after Sound.
+/// The Focus row after Sound. Wi-Fi, Battery, VPN, Headphones and Sound are native menu items so they can open submenus.
 final class StatusPanel: NSView {
-    enum Section { case power, focus }
     static let width: CGFloat = 314
-    let section: Section
     var onOpenSettings: ((SystemSettings.Page) -> Void)?
-    private let battery = StatusRow(height: 55, destination: .battery)
     private let focus = StatusRow(height: 35, destination: .focus, compact: true)
     override var allowsVibrancy: Bool { true }
 
-    init(section: Section) {
-        self.section = section
-        let height: CGFloat
-        let views: [NSView]
-        switch section {
-        case .power:
-            let separator = NSBox()
-            separator.boxType = .separator
-            separator.heightAnchor.constraint(equalToConstant: 1).isActive = true
-            views = [battery, separator]
-            height = 2 + 55 + 6
-        case .focus:
-            views = [focus]
-            height = 35 + 21
-        }
-        super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: height))
-        let stack = NSStackView(views: views)
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: 35 + 21))
+        let stack = NSStackView(views: [focus])
         stack.orientation = .vertical
         stack.alignment = .leading; stack.spacing = 0
-        for row in stack.arrangedSubviews { row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        focus.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.translatesAutoresizingMaskIntoConstraints = false; addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: section == .power ? 2 : 0)
+            stack.topAnchor.constraint(equalTo: topAnchor)
         ])
-        for row in views.compactMap({ $0 as? StatusRow }) {
-            row.onActivate = { [weak self, weak row] in
-                guard let row else { return }
-                self?.onOpenSettings?(row.destination)
-            }
-        }
+        focus.onActivate = { [weak self] in self?.onOpenSettings?(.focus) }
         update(SystemStatus())
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(_ state: SystemStatus) {
-        switch section {
-        case .power:
-            let batterySymbol = state.battery.charging ? "battery.100percent.bolt" : "battery.75percent"
-            battery.update(symbol: state.battery.present ? batterySymbol : "powerplug",
-                           title: L10n.battery, detail: state.battery.detail, value: state.battery.title)
-        case .focus:
-            focus.update(symbol: state.focus.symbol, title: L10n.focus, value: state.focus.title, active: state.focus.isActive)
-            if case .unavailable(let reason) = state.focus { focus.toolTip = reason }
-        }
+        focus.update(symbol: state.focus.symbol, title: L10n.focus, value: state.focus.title, active: state.focus.isActive)
+        if case .unavailable(let reason) = state.focus { focus.toolTip = reason }
     }
 }
 

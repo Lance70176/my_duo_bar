@@ -11,9 +11,9 @@ import CoreAudio
     static func main() {
         _ = NSApplication.shared
         var opened: [SystemSettings.Page] = []
-        for (section, expected) in [(StatusPanel.Section.power, [SystemSettings.Page.battery]),
-                                    (.focus, [.focus])] {
-            let panel = StatusPanel(section: section)
+        do {
+            let expected: [SystemSettings.Page] = [.focus]
+            let panel = StatusPanel()
             let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: panel.frame.width, height: panel.frame.height),
                                   styleMask: .borderless, backing: .buffered, defer: false)
             window.contentView = panel; window.orderFront(nil)
@@ -86,11 +86,12 @@ import CoreAudio
         vpnChecks()
         soundChecks()
         outputChecks()
+        batteryChecks()
         L10n.overrideForTesting(nil)
         check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "headphones target Bluetooth settings")
         check(SystemSettings.Page.allCases.allSatisfy { $0.url.scheme == "x-apple.systempreferences" },
               "settings links stay within the system settings application")
-        print("PASS: native settings actions, Wi-Fi, VPN, Headphones and Sound submenus, custom controls and network routing")
+        print("PASS: native settings actions, Wi-Fi, Battery, VPN, Headphones and Sound submenus, custom controls and network routing")
     }
 
     static func spin(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
@@ -334,6 +335,99 @@ extension PanelTests {
     }
 }
 
+extension PanelTests {
+    /// Exercises the Battery submenu against a fake limit: the Mac's real charge limit is never changed.
+    static func batteryChecks() {
+        let suite = "com.rex.myduobar.tests.battery"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let fake = FakeChargeLimitService(ChargeLimitState(supported: true, enabled: true, limit: 80, levels: [80, 85, 90, 95]))
+        let menu = BatteryMenuController(defaults: defaults)
+        menu.service = fake
+        var opened: [SystemSettings.Page] = []
+        var changes = 0
+        menu.onOpenSettings = { opened.append($0) }
+        menu.onChargeLimitChanged = { changes += 1 }
+        var state = SystemStatus()
+        state.battery = BatteryState(present: true, percent: 87, charging: false, externalPower: true, chargeLimit: 80)
+        menu.update(status: state)
+        check(menu.item.submenu === menu.submenu && menu.item.title == "電池" && menu.item.subtitle == "87% · 已充電到 80% 上限",
+              "Battery opens a submenu and shows the level and the limit")
+        check(BatteryMenuController.symbol(state.battery) == "battery.75percent"
+              && BatteryMenuController.symbol(BatteryState(present: true, percent: 10, charging: true)) == "battery.100percent.bolt"
+              && BatteryMenuController.symbol(BatteryState(present: true, percent: 10)) == "battery.0percent"
+              && BatteryMenuController.symbol(BatteryState()) == "powerplug", "the battery symbol follows level and charging")
+
+        menu.menuWillOpen(menu.submenu)
+        spin(0.2)
+        check(menu.submenu.items.first?.isSectionHeader == true && menu.submenu.items.first?.title == "充電上限"
+              && menu.submenu.items[1].view === menu.limitRow && menu.submenu.items.last?.title == "電池設定…",
+              "the submenu has a Charge Limit header, the switch row and Battery Settings")
+        check(menu.levelItems.map(\.title) == ["停在 80%", "停在 85%", "停在 90%", "停在 95%"] && menu.levelItems.map(\.state) == [.on, .off, .off, .off],
+              "every level macOS offers is listed with the active one checked")
+        check(menu.limitRow.toggleSwitch.isOn && menu.limitRow.detailText == "充到 80% 就停止充電", "the switch is on and names the limit")
+
+        let row = menu.limitRow
+        row.mouseUp(with: NSEvent.mouseEvent(with: .leftMouseUp, location: row.convert(NSPoint(x: 100, y: 20), to: nil),
+                                             modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                                             eventNumber: 0, clickCount: 1, pressure: 0) ?? NSEvent())
+        check(!row.toggleSwitch.isOn, "clicking the row turns the switch off at once")
+        spin(0.2)
+        check(fake.calls == ["disable"] && !row.toggleSwitch.isOn && row.detailText == "未限制，會充到 100%"
+              && menu.levelItems.allSatisfy { $0.state == .off } && changes == 1 && opened.isEmpty,
+              "turning the limit off asks macOS to disable it and unchecks every level")
+
+        menu.toggleLimit()
+        spin(0.2)
+        check(fake.calls.last == "set 80" && row.toggleSwitch.isOn && menu.levelItems[0].state == .on,
+              "turning it back on restores the last level")
+
+        let ninety = menu.levelItems[2]
+        ninety.target.map { _ = ($0 as? NSObject)?.perform(ninety.action, with: ninety) }
+        spin(0.2)
+        check(fake.calls.last == "set 90" && menu.levelItems.map(\.state) == [.off, .off, .on, .off] && row.detailText == "充到 90% 就停止充電"
+              && defaults.integer(forKey: BatteryMenuController.levelKey) == 90, "choosing a level sets it and remembers it")
+        menu.setLimit(nil)
+        spin(0.2)
+        menu.toggleLimit()
+        spin(0.2)
+        check(fake.calls.last == "set 90" && changes == 5, "the switch comes back on at the remembered level")
+
+        fake.refuse = true
+        menu.setLimit(85)
+        spin(0.2)
+        check(opened == [.battery] && changes == 5 && menu.levelItems.map(\.state) == [.off, .off, .on, .off],
+              "a refused change opens Battery settings and keeps the real value")
+        fake.refuse = false
+
+        fake.setExternally(ChargeLimitState(supported: true, enabled: true, limit: 95, levels: [80, 85, 90, 95]))
+        menu.update(status: state)
+        spin(0.2)
+        check(menu.levelItems.map(\.state) == [.off, .off, .off, .on] && defaults.integer(forKey: BatteryMenuController.levelKey) == 95,
+              "a limit chosen in System Settings shows up while the submenu is open and becomes the remembered level")
+
+        L10n.overrideForTesting(.en)
+        menu.rebuild()
+        check(menu.submenu.items.first?.title == "Charge Limit" && menu.levelItems.first?.title == "Stop at 80%"
+              && menu.submenu.items.last?.title == "Battery Settings…", "the submenu follows the app language")
+        L10n.overrideForTesting(.zhHant)
+        menu.submenu.items.last.map { item in _ = (item.target as? NSObject)?.perform(item.action) }
+        check(opened == [.battery, .battery], "Battery Settings opens the Battery page")
+        menu.menuDidClose(menu.submenu)
+
+        let unsupported = BatteryMenuController(defaults: defaults)
+        unsupported.service = FakeChargeLimitService(.unsupported)
+        unsupported.menuWillOpen(unsupported.submenu)
+        spin(0.2)
+        check(!unsupported.limitRow.toggleSwitch.isEnabled && unsupported.limitRow.detailText == "此 Mac 或此版 macOS 不提供充電上限"
+              && unsupported.levelItems.isEmpty, "without the system charge limit the switch is disabled and says why")
+        unsupported.toggleLimit()
+        spin(0.1)
+        unsupported.menuDidClose(unsupported.submenu)
+    }
+}
+
 final class ActionTarget: NSObject {
     let body: () -> Void
     init(_ body: @escaping () -> Void) { self.body = body }
@@ -400,6 +494,39 @@ final class FakeSoundService: SoundServing, @unchecked Sendable {
         lock.withLock {
             guard _output.canSetMute else { return false }
             _output.muted = muted
+            return true
+        }
+    }
+}
+
+/// In-memory charge limit for tests.
+final class FakeChargeLimitService: ChargeLimitServing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _state: ChargeLimitState
+    private var _calls: [String] = []
+    private var _refuse = false
+    init(_ state: ChargeLimitState) { _state = state }
+
+    var calls: [String] { lock.withLock { _calls } }
+    var refuse: Bool { get { lock.withLock { _refuse } } set { lock.withLock { _refuse = newValue } } }
+    func setExternally(_ state: ChargeLimitState) { lock.withLock { _state = state } }
+
+    func read() -> ChargeLimitState { lock.withLock { _state } }
+    func setLimit(_ percent: Int) -> Bool {
+        lock.withLock {
+            _calls.append("set \(percent)")
+            guard !_refuse else { return false }
+            _state.enabled = percent < 100
+            _state.limit = percent
+            return true
+        }
+    }
+    func disable() -> Bool {
+        lock.withLock {
+            _calls.append("disable")
+            guard !_refuse else { return false }
+            _state.enabled = false
+            _state.limit = 100
             return true
         }
     }

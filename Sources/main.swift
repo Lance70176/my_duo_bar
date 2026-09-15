@@ -7,8 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var item: NSStatusItem!
     private let menu = NSMenu()
     private let panelHeader = StatusPanelHeader()
-    private let powerPanel = StatusPanel(section: .power)
-    private let focusPanel = StatusPanel(section: .focus)
+    private let batteryMenu = BatteryMenuController()
+    private let focusPanel = StatusPanel()
     private let wifiMenu = WiFiMenuController()
     private let vpnMenu = VPNMenuController()
     private let outputMenu = OutputMenuController()
@@ -38,20 +38,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.menu.cancelTracking()
             DispatchQueue.main.async { SystemSettings.open(page) }
         }
-        powerPanel.onOpenSettings = openSettings
+        batteryMenu.onOpenSettings = openSettings
         focusPanel.onOpenSettings = openSettings
         wifiMenu.onOpenSettings = openSettings
         vpnMenu.onOpenSettings = openSettings
         outputMenu.onOpenSettings = openSettings
         soundMenu.onOpenSettings = openSettings
         outputMenu.onOutputChanged = { [weak self] in self?.monitor.refresh() }
+        batteryMenu.onChargeLimitChanged = { [weak self] in self?.monitor.refresh() }
         wifiMenu.onWiFiChanged = { [weak self] in self?.monitor.refresh() }
         vpnMenu.onVPNChanged = { [weak self] in self?.monitor.refresh() }
         menu.delegate = self
         menu.autoenablesItems = false
         let header = NSMenuItem(); header.view = panelHeader; menu.addItem(header)
         menu.addItem(wifiMenu.item)
-        let power = NSMenuItem(); power.view = powerPanel; menu.addItem(power)
+        menu.addItem(batteryMenu.item)
         menu.addItem(vpnMenu.item)
         menu.addItem(outputMenu.item)
         menu.addItem(soundMenu.item)
@@ -108,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateMenuRows(_ state: SystemStatus) {
-        powerPanel.update(state)
+        batteryMenu.update(status: state)
         wifiMenu.update(status: state)
         vpnMenu.update(status: state)
         outputMenu.update(status: state)
@@ -127,6 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         canvas.animateTurn()
         updateMenuRows(monitor.status)
         wifiMenu.prepare()
+        batteryMenu.prepare()
         vpnMenu.prepare()
         outputMenu.prepare()
         soundMenu.prepare()
@@ -163,6 +165,7 @@ if CommandLine.arguments.contains("--diagnose") {
         "externalPower": status.battery.externalPower,
         "powerRingGreen": status.battery.connectedToPower && !status.battery.lowPowerMode,
         "batteryPercent": status.battery.percent as Any? ?? NSNull(),
+        "chargeLimit": status.battery.chargeLimit as Any? ?? NSNull(),
         "wifiAssociated": status.wifi.associated,
         "wifiNameAvailable": status.wifi.ssid != nil,
         "vpnConfirmedCount": status.vpn.names.count,
