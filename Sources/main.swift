@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let bluetoothMenu = BluetoothMenuController()
     private let soundMenu = SoundMenuController()
     private let monitor = SystemMonitor()
-    private let preferences = DotPreferences()
+    private let preferences = IconPreferences()
     private let canvas = StatusIconView()
     private var settings: SettingsController?
     private let systemIconsItem = NSMenuItem(title: "", action: #selector(openSystemIcons), keyEquivalent: "")
@@ -136,7 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuDidClose(_ menu: NSMenu) { monitor.setMenuOpen(false) }
 
     private func renderIcon() {
-        canvas.update(monitor.status, layout: preferences.layout)
+        canvas.update(monitor.status, showVolume: preferences.showVolume)
     }
 
     @objc private func showSettings() {

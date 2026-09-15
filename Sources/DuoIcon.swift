@@ -6,12 +6,16 @@ enum DuoIcon {
     static let outerDiameter: CGFloat = 26
     static let strokeWidth: CGFloat = 2.47
     static let dotDiameter: CGFloat = 3.12
+    /// Half the length of the mute bar, cap to cap, so it spans the same arc as the four volume marks.
+    static let barHalfLength: CGFloat = 6.5
     static let radius: CGFloat = (outerDiameter - strokeWidth) / 2
     static let center = NSPoint(x: size.width / 2, y: size.height / 2)
+    /// The rect the Wi-Fi glyph, or a headphone symbol in its place, is drawn in.
+    static let centerRect = NSRect(x: 10.1, y: 11, width: 11.8, height: 8)
 
-    static func image(status: SystemStatus, layout: DotLayout = DotLayout(), template: Bool = true) -> NSImage {
+    static func image(status: SystemStatus, showVolume: Bool = true, template: Bool = true) -> NSImage {
         let image = NSImage(size: size, flipped: false) { rect in
-            draw(status: status, layout: layout, in: rect, color: .black)
+            draw(status: status, showVolume: showVolume, in: rect, color: .black)
             return true
         }
         image.isTemplate = template && !status.battery.connectedToPower && !status.battery.lowPowerMode
@@ -20,18 +24,19 @@ enum DuoIcon {
 
     enum Components { case all, center }
 
-    static func draw(status: SystemStatus, layout: DotLayout = DotLayout(), presentation: IconFrame? = nil, in rect: NSRect, color: NSColor, components: Components = .all) {
+    /// Draws the icon. `centerSymbol` replaces the Wi-Fi glyph for the moment headphones connect, in `centerTint`.
+    static func draw(status: SystemStatus, showVolume: Bool = true, presentation: IconFrame? = nil, in rect: NSRect, color: NSColor,
+                     components: Components = .all, centerSymbol: String? = nil, centerTint: NSColor? = nil) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.saveGState()
         let scale = min(rect.width / size.width, rect.height / size.height)
         ctx.translateBy(x: rect.midX - size.width * scale / 2, y: rect.midY - size.height * scale / 2)
         ctx.scaleBy(x: scale, y: scale)
-        let dots = layout.visible
         let frame = presentation ?? .steady(status)
         let strokeWidth = Self.strokeWidth
         let center = Self.center
         let radius = Self.radius
-        // The bottom dots and battery stroke share one circular path.
+        // The bottom volume marks and battery stroke share one circular path.
         let start: CGFloat = 210
         let sweep: CGFloat = -240
         let base = color.usingColorSpace(.deviceRGB) ?? color
@@ -63,27 +68,53 @@ enum DuoIcon {
             }
             ctx.restoreGState()
         }
-        if let old = frame.previousWiFi, frame.wifiBlend < 1 {
-            ctx.saveGState(); ctx.setAlpha(1-frame.wifiBlend)
-            drawWiFi(old, in: NSRect(x: 10.1, y: 11, width: 11.8, height: 8), color: color)
+        if let centerSymbol {
+            drawSymbol(centerSymbol, in: centerRect, color: centerTint ?? color)
+        } else {
+            if let old = frame.previousWiFi, frame.wifiBlend < 1 {
+                ctx.saveGState(); ctx.setAlpha(1-frame.wifiBlend)
+                drawWiFi(old, in: centerRect, color: color)
+                ctx.restoreGState()
+            }
+            ctx.saveGState(); ctx.setAlpha(frame.wifiBlend)
+            drawWiFi(status.wifi, in: centerRect, color: color)
             ctx.restoreGState()
         }
-        ctx.saveGState(); ctx.setAlpha(frame.wifiBlend)
-        drawWiFi(status.wifi, in: NSRect(x: 10.1, y: 11, width: 11.8, height: 8), color: color)
-        ctx.restoreGState()
-        // Equal-sized dots: only opacity changes with the state.
-        if components == .all {
-            for (index, glyph) in dots.enumerated() {
-                let active = frame.active[glyph] ?? 0
-                let diameter = Self.dotDiameter
-                color.withAlphaComponent(0.50 + 0.50*active).setFill()
-                let angle = (270 + (CGFloat(index) - CGFloat(dots.count - 1) / 2) * 20) * .pi / 180 + frame.ringAngle
-                let point = NSPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
-                NSBezierPath(ovalIn: NSRect(x: point.x - diameter / 2, y: point.y - diameter / 2,
-                                           width: diameter, height: diameter)).fill()
-            }
+        if components == .all && showVolume {
+            drawVolume(frame, color: color)
         }
         ctx.restoreGState()
+    }
+
+    /// The bottom of the ring: four equal marks, one lit per 25% of volume, or a single bar while muted.
+    private static func drawVolume(_ frame: IconFrame, color: NSColor) {
+        let center = Self.center
+        let radius = Self.radius
+        if frame.muted {
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+            ctx.saveGState()
+            ctx.translateBy(x: center.x, y: center.y); ctx.rotate(by: frame.ringAngle)
+            ctx.translateBy(x: -center.x, y: -center.y)
+            color.setStroke()
+            let bar = NSBezierPath()
+            bar.lineWidth = dotDiameter; bar.lineCapStyle = .round
+            let half = barHalfLength - dotDiameter / 2
+            bar.move(to: NSPoint(x: center.x - half, y: center.y - radius))
+            bar.line(to: NSPoint(x: center.x + half, y: center.y - radius))
+            bar.stroke()
+            ctx.restoreGState()
+            return
+        }
+        // Equal-sized marks: only opacity changes with the level.
+        for index in 0..<4 {
+            let lit = frame.volumeLevel.map { index < $0 } ?? false
+            let diameter = dotDiameter
+            color.withAlphaComponent(lit ? 1 : 0.50).setFill()
+            let angle = (270 + (CGFloat(index) - 1.5) * 20) * .pi / 180 + frame.ringAngle
+            let point = NSPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
+            NSBezierPath(ovalIn: NSRect(x: point.x - diameter / 2, y: point.y - diameter / 2,
+                                       width: diameter, height: diameter)).fill()
+        }
     }
 
     private static func drawWiFi(_ wifi: WiFiState, in rect: NSRect, color: NSColor) {

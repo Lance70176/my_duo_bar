@@ -3,15 +3,25 @@ import QuartzCore
 
 /// WindowServer animates the circle independently of status queries and menu tracking.
 final class StatusIconView: NSView {
+    /// How long the headphone symbol replaces Wi-Fi after headphones connect.
+    static let headphoneGlimpse: TimeInterval = 2.2
+
     private let outer = CALayer()
     private let track = CAShapeLayer()
     private let battery = CAShapeLayer()
     private let sweep = CAShapeLayer()
     private let center = CALayer()
     private let dots = (0..<4).map { _ in CAShapeLayer() }
+    private let bar = CAShapeLayer()
     private var status: SystemStatus?
-    private var dotLayout = DotLayout()
+    private var showVolume = true
+    /// The symbol shown in place of Wi-Fi while headphones have just connected.
+    private var glimpseSymbol: String?
+    private var glimpseGeneration = 0
     private var reducedMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
+    /// True while the icon shows the headphone symbol instead of Wi-Fi.
+    var isShowingHeadphones: Bool { glimpseSymbol != nil }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -31,7 +41,25 @@ final class StatusIconView: NSView {
             outer.addSublayer(shape)
         }
         sweep.opacity = 0
-        dots.forEach { outer.addSublayer($0) }
+        for (index, dot) in dots.enumerated() {
+            let angle = (270 + (CGFloat(index) - 1.5) * 20) * .pi/180
+            let point = CGPoint(x: DuoIcon.center.x + DuoIcon.radius * cos(angle),
+                                y: DuoIcon.center.y + DuoIcon.radius * sin(angle))
+            let diameter = DuoIcon.dotDiameter
+            dot.path = CGPath(ellipseIn: CGRect(x: point.x - diameter/2, y: point.y - diameter/2,
+                                               width: diameter, height: diameter), transform: nil)
+            outer.addSublayer(dot)
+        }
+        bar.fillColor = nil
+        bar.lineWidth = DuoIcon.dotDiameter
+        bar.lineCap = .round
+        let half = DuoIcon.barHalfLength - DuoIcon.dotDiameter / 2
+        let line = CGMutablePath()
+        line.move(to: CGPoint(x: DuoIcon.center.x - half, y: DuoIcon.center.y - DuoIcon.radius))
+        line.addLine(to: CGPoint(x: DuoIcon.center.x + half, y: DuoIcon.center.y - DuoIcon.radius))
+        bar.path = line
+        bar.isHidden = true
+        outer.addSublayer(bar)
     }
     convenience init() { self.init(frame: .zero) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -51,15 +79,34 @@ final class StatusIconView: NSView {
         render(status, animated: false)
     }
 
-    func update(_ value: SystemStatus, layout: DotLayout = DotLayout()) {
+    func update(_ value: SystemStatus, showVolume: Bool = true) {
         let old = status
-        let layoutChanged = layout.visible != dotLayout.visible
-        guard old != value || layoutChanged else { return }
-        status = value; dotLayout = layout
+        let volumeChanged = showVolume != self.showVolume
+        guard old != value || volumeChanged else { return }
+        status = value; self.showVolume = showVolume
+        if let old, !old.audio.headphoneActive, value.audio.headphoneActive {
+            beginGlimpse(value.audio.headphoneSymbol)
+        } else if !value.audio.headphoneActive {
+            glimpseSymbol = nil
+        }
         render(value, animated: old != nil && !reducedMotion)
         if let old, value.shouldAnimate(from: old) { animateTurn() }
         if let old, !old.battery.connectedToPower && value.battery.connectedToPower { animateCharging() }
         if !value.battery.connectedToPower { sweep.removeAllAnimations(); sweep.opacity = 0 }
+    }
+
+    /// Shows the headphones in the middle for a moment, then brings Wi-Fi back.
+    private func beginGlimpse(_ symbol: String) {
+        glimpseSymbol = symbol
+        glimpseGeneration += 1
+        let generation = glimpseGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.headphoneGlimpse) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.glimpseGeneration == generation, self.glimpseSymbol != nil else { return }
+                self.glimpseSymbol = nil
+                if let status = self.status { self.render(status, animated: !self.reducedMotion) }
+            }
+        }
     }
 
     private func render(_ value: SystemStatus, animated: Bool) {
@@ -77,19 +124,16 @@ final class StatusIconView: NSView {
             transition(battery, "strokeColor", to: ring.cgColor, animated: animated)
             transition(battery, "strokeEnd", to: CGFloat(value.battery.percent ?? 0)/100, animated: animated)
             sweep.strokeColor = ring.blended(withFraction: 0.7, of: .white)?.cgColor
-            let visible = dotLayout.visible
+            let muted = value.audio.showsMuteBar
+            let level = value.audio.volumeLevel
             for (index, dot) in dots.enumerated() {
-                dot.isHidden = index >= visible.count
-                guard index < visible.count else { continue }
-                let angle = (270 + (CGFloat(index)-CGFloat(visible.count-1)/2)*20) * .pi/180
-                let point = CGPoint(x: DuoIcon.center.x+DuoIcon.radius*cos(angle),
-                                    y: DuoIcon.center.y+DuoIcon.radius*sin(angle))
-                let diameter = DuoIcon.dotDiameter
-                dot.path = CGPath(ellipseIn: CGRect(x: point.x-diameter/2, y: point.y-diameter/2,
-                                                   width: diameter, height: diameter), transform: nil)
+                dot.isHidden = !showVolume || muted
                 dot.fillColor = color.cgColor
-                transition(dot, "opacity", to: visible[index].isActive(in: value) ? Float(1) : Float(0.50), animated: animated)
+                let lit = level.map { index < $0 } ?? false
+                transition(dot, "opacity", to: lit ? Float(1) : Float(0.50), animated: animated)
             }
+            bar.isHidden = !showVolume || !muted
+            bar.strokeColor = color.cgColor
             let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(DuoIcon.size.width*scale), pixelsHigh: Int(DuoIcon.size.height*scale),
                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
@@ -97,7 +141,8 @@ final class StatusIconView: NSView {
             rep.size = DuoIcon.size
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-            DuoIcon.draw(status: value, layout: dotLayout, in: NSRect(origin: .zero, size: DuoIcon.size), color: color, components: .center)
+            DuoIcon.draw(status: value, showVolume: showVolume, in: NSRect(origin: .zero, size: DuoIcon.size), color: color,
+                         components: .center, centerSymbol: glimpseSymbol, centerTint: .controlAccentColor)
             NSGraphicsContext.restoreGraphicsState()
             if animated {
                 let fade = CATransition(); fade.type = .fade; fade.duration = 0.24
@@ -145,6 +190,6 @@ final class StatusIconView: NSView {
         sweep.add(group, forKey: "charging")
     }
     func stopAnimations() {
-        ([outer, center, track, battery, sweep] + dots).forEach { $0.removeAllAnimations() }
+        ([outer, center, track, battery, sweep, bar] + dots).forEach { $0.removeAllAnimations() }
     }
 }

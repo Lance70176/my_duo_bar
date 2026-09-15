@@ -192,8 +192,8 @@ final class StatusPanel: NSView {
 
 final class LargeIconView: NSView {
     var status = SystemStatus.preview() { didSet { needsDisplay = true } }
-    var layout = DotLayout() { didSet { needsDisplay = true } }
+    var showVolume = true { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
-        DuoIcon.draw(status: status, layout: layout, in: bounds, color: .labelColor)
+        DuoIcon.draw(status: status, showVolume: showVolume, in: bounds, color: .labelColor)
     }
 }
