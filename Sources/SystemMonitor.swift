@@ -40,10 +40,13 @@ final class SystemMonitor: NSObject, CWEventDelegate {
             else if path.usesInterfaceType(.wifi) { link = .wifi }
             else if path.usesInterfaceType(.wiredEthernet) { link = .ethernet }
             else { link = .other }
-            Task { @MainActor in
-                guard let self else { return }
-                self.route = link
-                self.refresh()
+            // DispatchQueue.main is FIFO, so a newer path can never be applied before an older one.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.route = link
+                    self.refresh()
+                }
             }
         }
         path.start(queue: worker)
@@ -127,10 +130,12 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         guard !sleeping else { return }
         worker.async { [weak self] in
             let focus = SystemReaders.focus()
-            Task { @MainActor in
-                guard let self, !self.sleeping, self.status.focus != focus else { return }
-                self.status.focus = focus
-                self.onChange?(self.status)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, !self.sleeping, self.status.focus != focus else { return }
+                    self.status.focus = focus
+                    self.onChange?(self.status)
+                }
             }
         }
     }
@@ -149,7 +154,8 @@ final class SystemMonitor: NSObject, CWEventDelegate {
             value.audio = SystemReaders.audio()
             value.focus = SystemReaders.focus()
             let sample = value
-            Task { @MainActor in self?.finishSample(sample) }
+            // Keep worker order on the main queue so a focus-only result and a full sample stay ordered.
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.finishSample(sample) } }
         }
     }
 

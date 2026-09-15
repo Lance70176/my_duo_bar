@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Sourced by build.sh and test.sh. Picks a Swift compiler and macOS SDK that belong together.
+# Sourced by build.sh and test.sh (both set DUOBAR_ROOT first). Picks a Swift compiler and macOS SDK that belong together.
 #
 # MyDuoBar is built primarily against the macOS 27 SDK. A machine can have an older Xcode selected
 # while Command Line Tools carry the macOS 27 SDK (or the reverse); mixing the two fails with
@@ -20,7 +20,9 @@ duobar_select_toolchain() {
         return 0
     fi
     local probe_dir probe_file candidate sdk version major
-    probe_dir=$(mktemp -d)
+    # Stay inside the project build directory so environments without /tmp write access still work.
+    mkdir -p "$DUOBAR_ROOT/build"
+    probe_dir=$(mktemp -d "$DUOBAR_ROOT/build/toolchain-probe.XXXXXX")
     probe_file="$probe_dir/probe.swift"
     print 'import AppKit\nlet _ = NSApplication.shared' > "$probe_file"
     for candidate in "${DEVELOPER_DIR:-$(xcode-select -p)}" /Library/Developer/CommandLineTools; do
