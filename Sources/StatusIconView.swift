@@ -1,7 +1,10 @@
 import AppKit
 import QuartzCore
 
-/// WindowServer animates the circle independently of status queries and menu tracking.
+/// WindowServer animates the ring independently of status queries and menu tracking.
+///
+/// The stroked layers share one path that runs twice around the capsule, so a turn can slide the
+/// visible window one full lap without ever wrapping past the end of the path.
 final class StatusIconView: NSView {
     private let outer = CALayer()
     private let track = CAShapeLayer()
@@ -12,6 +15,9 @@ final class StatusIconView: NSView {
     private var status: SystemStatus?
     private var dotLayout = DotLayout()
     private var reducedMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    /// Stroke fractions are measured against the two-lap path.
+    private static let laps: CGFloat = 2
+    private static let trackEnd = DuoIcon.trackSpan / laps
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -19,19 +25,26 @@ final class StatusIconView: NSView {
         layerContentsRedrawPolicy = .never
         layer?.addSublayer(outer)
         layer?.addSublayer(center)
+        let path = DuoIcon.arcPath(from: DuoIcon.trackStart, span: Self.laps)
         [track, battery, sweep].forEach { shape in
             shape.frame = NSRect(origin: .zero, size: DuoIcon.size)
             shape.fillColor = nil
             shape.lineWidth = DuoIcon.strokeWidth
             shape.lineCap = .round
-            let path = CGMutablePath()
-            path.addArc(center: DuoIcon.center, radius: DuoIcon.radius,
-                        startAngle: 210 * .pi/180, endAngle: -30 * .pi/180, clockwise: true)
+            shape.lineJoin = .round
             shape.path = path
+            shape.strokeStart = 0
+            shape.strokeEnd = Self.trackEnd
             outer.addSublayer(shape)
         }
+        battery.strokeEnd = 0
+        sweep.strokeEnd = 0
         sweep.opacity = 0
-        dots.forEach { outer.addSublayer($0) }
+        let diameter = DuoIcon.dotDiameter
+        for dot in dots {
+            dot.path = CGPath(ellipseIn: CGRect(x: -diameter/2, y: -diameter/2, width: diameter, height: diameter), transform: nil)
+            outer.addSublayer(dot)
+        }
     }
     convenience init() { self.init(frame: .zero) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -75,18 +88,13 @@ final class StatusIconView: NSView {
             CATransaction.begin(); CATransaction.setDisableActions(true)
             transition(track, "strokeColor", to: ring.withAlphaComponent(0.20).cgColor, animated: animated)
             transition(battery, "strokeColor", to: ring.cgColor, animated: animated)
-            transition(battery, "strokeEnd", to: CGFloat(value.battery.percent ?? 0)/100, animated: animated)
+            transition(battery, "strokeEnd", to: CGFloat(value.battery.percent ?? 0)/100 * Self.trackEnd, animated: animated)
             sweep.strokeColor = ring.blended(withFraction: 0.7, of: .white)?.cgColor
             let visible = dotLayout.visible
             for (index, dot) in dots.enumerated() {
                 dot.isHidden = index >= visible.count
                 guard index < visible.count else { continue }
-                let angle = (270 + (CGFloat(index)-CGFloat(visible.count-1)/2)*20) * .pi/180
-                let point = CGPoint(x: DuoIcon.center.x+DuoIcon.radius*cos(angle),
-                                    y: DuoIcon.center.y+DuoIcon.radius*sin(angle))
-                let diameter = DuoIcon.dotDiameter
-                dot.path = CGPath(ellipseIn: CGRect(x: point.x-diameter/2, y: point.y-diameter/2,
-                                                   width: diameter, height: diameter), transform: nil)
+                dot.position = DuoIcon.point(atFraction: DuoIcon.dotFraction(index: index, count: visible.count))
                 dot.fillColor = color.cgColor
                 transition(dot, "opacity", to: visible[index].isActive(in: value) ? Float(1) : Float(0.50), animated: animated)
             }
@@ -109,36 +117,66 @@ final class StatusIconView: NSView {
     }
 
     private func transition(_ layer: CALayer, _ key: String, to value: Any, animated: Bool) {
-        let previous = layer.presentation()?.value(forKeyPath: key) ?? layer.value(forKeyPath: key)
+        let model = layer.value(forKeyPath: key)
+        let previous = layer.presentation()?.value(forKeyPath: key) ?? model
         layer.setValue(value, forKeyPath: key)
         guard animated else { layer.removeAnimation(forKey: key); return }
         let animation = CABasicAnimation(keyPath: key)
-        animation.fromValue = previous; animation.toValue = value
+        if let from = model as? CGFloat, let to = value as? CGFloat, key == "strokeEnd" {
+            // Additive, so the battery keeps moving smoothly while a turn shifts the same property.
+            animation.fromValue = from - to; animation.toValue = 0; animation.isAdditive = true
+        } else {
+            animation.fromValue = previous; animation.toValue = value
+        }
         animation.duration = 0.32
         animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         layer.add(animation, forKey: key)
     }
 
+    /// Slides the arc and the dots one full lap along the capsule. Every animation is additive, so
+    /// battery updates and the charging sweep keep working while the ring is on its way round.
     func animateTurn() {
         guard !reducedMotion else { stopAnimations(); return }
         // Rapid changes and opening the menu join the current turn instead of restarting it.
-        guard outer.animation(forKey: "turn") == nil else { return }
-        let turn = CAKeyframeAnimation(keyPath: "transform.rotation.z")
+        guard track.animation(forKey: "turn") == nil else { return }
         let samples = 180
-        turn.values = (0...samples).map { IconTurn.angle(at: IconTurn.duration * Double($0)/Double(samples)) }
-        turn.keyTimes = (0...samples).map { NSNumber(value: Double($0)/Double(samples)) }
-        turn.duration = IconTurn.duration
-        turn.calculationMode = .linear
-        outer.add(turn, forKey: "turn")
+        let times = (0...samples).map { NSNumber(value: Double($0)/Double(samples)) }
+        // Radians map onto the outline like a circle; the turn is clockwise, which is the path's direction.
+        let offsets = (0...samples).map { IconTurn.angle(at: IconTurn.duration * Double($0)/Double(samples)) / (2 * .pi) }
+        func keyframes(_ keyPath: String, _ values: [Any]) -> CAKeyframeAnimation {
+            let turn = CAKeyframeAnimation(keyPath: keyPath)
+            turn.values = values; turn.keyTimes = times
+            turn.duration = IconTurn.duration
+            turn.calculationMode = .linear
+            turn.isAdditive = true
+            return turn
+        }
+        let shifts = offsets.map { -$0 / Self.laps }
+        for shape in [track, battery, sweep] {
+            shape.add(keyframes("strokeStart", shifts), forKey: "turn")
+            shape.add(keyframes("strokeEnd", shifts), forKey: "turnEnd")
+        }
+        let visible = dotLayout.visible
+        for (index, dot) in dots.enumerated() where index < visible.count {
+            let fraction = DuoIcon.dotFraction(index: index, count: visible.count)
+            let rest = DuoIcon.point(atFraction: fraction)
+            let deltas = offsets.map { offset -> NSValue in
+                let p = DuoIcon.point(atFraction: fraction + offset)
+                return NSValue(point: NSPoint(x: p.x - rest.x, y: p.y - rest.y))
+            }
+            dot.add(keyframes("position", deltas), forKey: "turn")
+        }
     }
 
     private func animateCharging() {
         guard !reducedMotion else { return }
-        let percent = CGFloat(status?.battery.percent ?? 0)/100
+        let percent = CGFloat(status?.battery.percent ?? 0)/100 * Self.trackEnd
+        let tail = DuoIcon.sweepTail / Self.laps
+        // Additive with a zero model value, so a turn in progress simply adds its own shift.
         let end = CABasicAnimation(keyPath: "strokeEnd")
-        end.fromValue = 0; end.toValue = percent
+        end.fromValue = 0; end.toValue = percent; end.isAdditive = true
         let start = CABasicAnimation(keyPath: "strokeStart")
-        start.fromValue = -0.09; start.toValue = max(0, percent-0.09)
+        start.fromValue = -tail; start.toValue = max(0, percent-tail); start.isAdditive = true
         let glow = CAKeyframeAnimation(keyPath: "opacity")
         glow.values = [0, 0.8, 0]; glow.keyTimes = [0, 0.5, 1]
         let group = CAAnimationGroup(); group.animations = [start, end, glow]; group.duration = 1.05
