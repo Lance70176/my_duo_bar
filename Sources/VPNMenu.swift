@@ -186,94 +186,22 @@ struct SystemVPNService: VPNServing {
 }
 
 /// One VPN: key badge (accent when on), name, status line and a switch. The whole row toggles.
-final class VPNRowView: NSView {
+final class VPNRowView: SwitchRowView {
     private(set) var configuration: VPNConfiguration
-    let toggleSwitch: MenuSwitch
-    private let onToggle: () -> Void
-    private let badge = NSView()
-    private let glyph = NSImageView()
-    private let name = NSTextField(labelWithString: "")
-    private let detail = NSTextField(labelWithString: "")
-    override var allowsVibrancy: Bool { true }
 
     init(configuration: VPNConfiguration, onToggle: @escaping () -> Void) {
         self.configuration = configuration
+        super.init(width: VPNMenuController.rowWidth)
         self.onToggle = onToggle
-        toggleSwitch = MenuSwitch(isOn: configuration.status.isOn)
-        super.init(frame: NSRect(x: 0, y: 0, width: VPNMenuController.rowWidth, height: 42))
-        badge.wantsLayer = true
-        badge.layer?.cornerRadius = 12
-        glyph.image = NSImage(systemSymbolName: "key.horizontal.fill", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 11, weight: .semibold))
-        name.font = .systemFont(ofSize: 13)
-        name.lineBreakMode = .byTruncatingTail
-        name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        detail.font = .systemFont(ofSize: 11)
-        detail.textColor = .secondaryLabelColor
-        for view in [badge, name, detail, toggleSwitch] as [NSView] {
-            view.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(view)
-        }
-        glyph.translatesAutoresizingMaskIntoConstraints = false
-        badge.addSubview(glyph)
-        NSLayoutConstraint.activate([
-            badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            badge.centerYAnchor.constraint(equalTo: centerYAnchor),
-            badge.widthAnchor.constraint(equalToConstant: 24),
-            badge.heightAnchor.constraint(equalToConstant: 24),
-            glyph.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
-            glyph.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
-            name.leadingAnchor.constraint(equalTo: badge.trailingAnchor, constant: 9),
-            name.bottomAnchor.constraint(equalTo: centerYAnchor, constant: 1),
-            name.trailingAnchor.constraint(lessThanOrEqualTo: toggleSwitch.leadingAnchor, constant: -10),
-            detail.leadingAnchor.constraint(equalTo: name.leadingAnchor),
-            detail.topAnchor.constraint(equalTo: centerYAnchor, constant: 1),
-            detail.trailingAnchor.constraint(lessThanOrEqualTo: toggleSwitch.leadingAnchor, constant: -10),
-            toggleSwitch.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            toggleSwitch.centerYAnchor.constraint(equalTo: centerYAnchor)
-        ])
-        setAccessibilityElement(true)
-        setAccessibilityRole(.checkBox)
         update(configuration)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(_ configuration: VPNConfiguration) {
         self.configuration = configuration
-        name.stringValue = configuration.name
-        detail.stringValue = configuration.status.title
-        toggleSwitch.isOn = configuration.status.isOn
-        toggleSwitch.isEnabled = !configuration.status.isTransitioning && configuration.status != .invalid
-        applyColors()
-        setAccessibilityLabel(configuration.name + ", " + configuration.status.title)
-        setAccessibilityValue(configuration.status.isOn)
-        setAccessibilityHelp(L10n.vpnToggle(configuration.name))
-    }
-
-    private func applyColors() {
-        let on = configuration.status.isOn
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            badge.layer?.backgroundColor = (on ? NSColor.controlAccentColor : NSColor.labelColor.withAlphaComponent(0.1)).cgColor
-        }
-        glyph.contentTintColor = on ? .white : .labelColor
-    }
-    override func viewDidChangeEffectiveAppearance() { applyColors() }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
-    override func draw(_ dirtyRect: NSRect) {
-        if enclosingMenuItem?.isHighlighted == true {
-            NSColor.labelColor.withAlphaComponent(0.1).setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 1), xRadius: 6, yRadius: 6).fill()
-        }
-        super.draw(dirtyRect)
-    }
-    override func mouseDown(with event: NSEvent) {}
-    override func mouseUp(with event: NSEvent) {
-        guard bounds.contains(convert(event.locationInWindow, from: nil)), toggleSwitch.isEnabled else { return }
-        onToggle()
-    }
-    override func accessibilityPerformPress() -> Bool {
-        guard toggleSwitch.isEnabled else { return false }
-        onToggle(); return true
+        configure(symbol: "key.horizontal.fill", title: configuration.name, detail: configuration.status.title,
+                  isOn: configuration.status.isOn,
+                  isEnabled: !configuration.status.isTransitioning && configuration.status != .invalid,
+                  help: L10n.vpnToggle(configuration.name))
     }
 }

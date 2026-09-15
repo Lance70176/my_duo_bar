@@ -130,23 +130,21 @@ final class StatusPanelHeader: NSView {
     func update(preview: Bool = false) { mode.stringValue = preview ? L10n.sampleStatus : L10n.thisMac }
 }
 
-/// A block of status rows. Wi-Fi and VPN are native menu items between blocks so they can open submenus:
-/// `.power` is the battery row plus the divider under it, `.devices` is headphones, sound and Focus.
+/// A block of status rows. Wi-Fi, VPN and Sound are native menu items between blocks so they can open submenus:
+/// `.power` is the battery row plus the divider under it, then `.headphones` and `.focus` around Sound.
 final class StatusPanel: NSView {
-    enum Section { case power, devices }
+    enum Section { case power, headphones, focus }
     static let width: CGFloat = 314
     let section: Section
     var onOpenSettings: ((SystemSettings.Page) -> Void)?
     private let battery = StatusRow(height: 55, destination: .battery)
     private let headphones = StatusRow(height: 35, destination: .bluetooth, compact: true)
-    private let sound = StatusRow(height: 35, destination: .sound, compact: true)
     private let focus = StatusRow(height: 35, destination: .focus, compact: true)
     override var allowsVibrancy: Bool { true }
 
     init(section: Section) {
         self.section = section
-        let height: CGFloat = section == .power ? 2 + 55 + 6 : 3 * 35 + 21
-        super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: height))
+        let height: CGFloat
         let views: [NSView]
         switch section {
         case .power:
@@ -154,9 +152,15 @@ final class StatusPanel: NSView {
             separator.boxType = .separator
             separator.heightAnchor.constraint(equalToConstant: 1).isActive = true
             views = [battery, separator]
-        case .devices:
-            views = [headphones, sound, focus]
+            height = 2 + 55 + 6
+        case .headphones:
+            views = [headphones]
+            height = 35
+        case .focus:
+            views = [focus]
+            height = 35 + 21
         }
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: height))
         let stack = NSStackView(views: views)
         stack.orientation = .vertical
         stack.alignment = .leading; stack.spacing = 0
@@ -183,11 +187,9 @@ final class StatusPanel: NSView {
             let batterySymbol = state.battery.charging ? "battery.100percent.bolt" : "battery.75percent"
             battery.update(symbol: state.battery.present ? batterySymbol : "powerplug",
                            title: L10n.battery, detail: state.battery.detail, value: state.battery.title)
-        case .devices:
+        case .headphones:
             headphones.update(symbol: "headphones", title: L10n.headphones, value: state.audio.headphoneTitle, active: state.audio.headphoneActive)
-            sound.update(symbol: state.audio.muted == true ? "speaker.slash.fill" : "speaker.wave.2",
-                         title: L10n.sound, value: state.audio.soundTitle)
-            sound.toolTip = state.audio.outputName + " · " + state.audio.soundTitle
+        case .focus:
             focus.update(symbol: state.focus.symbol, title: L10n.focus, value: state.focus.title, active: state.focus.isActive)
             if case .unavailable(let reason) = state.focus { focus.toolTip = reason }
         }

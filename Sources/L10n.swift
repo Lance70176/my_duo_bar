@@ -183,6 +183,13 @@ enum L10n {
     static var vpnSystemProxyActive: String { pick("系統代理已開啟，無法在此切換", "System proxy is on; change it in its own app", "システムプロキシがオンです（ここでは切り替えできません）") }
     static func vpnToggle(_ name: String) -> String { pick("切換 \(name)", "Toggle \(name)", "\(name) を切り替え") }
 
+    // MARK: Sound submenu
+    static var volume: String { pick("音量", "Volume", "音量") }
+    static var soundSettingsMenu: String { pick("聲音設定…", "Sound Settings…", "サウンド設定…") }
+    static var muteUnsupported: String { pick("此裝置無法靜音", "This device can't be muted", "このデバイスは消音できません") }
+    static var volumeUnsupported: String { pick("此裝置無法調整音量", "This device's volume can't be changed", "このデバイスの音量は変更できません") }
+    static var muteToggle: String { pick("切換靜音", "Turn mute on or off", "消音を切り替え") }
+
     // MARK: Icon guide
     static var iconGuide: String { pick("圖示說明", "Icon Guide", "アイコンの見かた") }
     static var guideRing: String {

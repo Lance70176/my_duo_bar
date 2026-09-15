@@ -1,5 +1,6 @@
 import AppKit
 import Intents
+import AudioToolbox
 import CoreAudio
 import CoreWLAN
 import IOKit.ps
@@ -117,8 +118,10 @@ enum SystemReaders {
         result.outputName = string(device, kAudioObjectPropertyName) ?? L10n.currentOutputDevice
         let mute: UInt32? = value(device, kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeOutput)
         result.muted = mute.map { $0 != 0 }
+        // The virtual main volume is what the sound submenu's slider sets; the scalars cover devices without it.
+        let virtualMain: Float32? = value(device, kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: kAudioDevicePropertyScopeOutput)
         let master: Float32? = value(device, kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput)
-        let volume: Float32? = master ?? {
+        let volume: Float32? = virtualMain ?? master ?? {
             let left: Float32? = value(device, kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput, element: 1)
             let right: Float32? = value(device, kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput, element: 2)
             let channels = [left, right].compactMap { $0 }

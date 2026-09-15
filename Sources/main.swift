@@ -8,9 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let menu = NSMenu()
     private let panelHeader = StatusPanelHeader()
     private let powerPanel = StatusPanel(section: .power)
-    private let devicesPanel = StatusPanel(section: .devices)
+    private let headphonesPanel = StatusPanel(section: .headphones)
+    private let focusPanel = StatusPanel(section: .focus)
     private let wifiMenu = WiFiMenuController()
     private let vpnMenu = VPNMenuController()
+    private let soundMenu = SoundMenuController()
     private let monitor = SystemMonitor()
     private let preferences = DotPreferences()
     private let canvas = StatusIconView()
@@ -37,9 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.async { SystemSettings.open(page) }
         }
         powerPanel.onOpenSettings = openSettings
-        devicesPanel.onOpenSettings = openSettings
+        headphonesPanel.onOpenSettings = openSettings
+        focusPanel.onOpenSettings = openSettings
         wifiMenu.onOpenSettings = openSettings
         vpnMenu.onOpenSettings = openSettings
+        soundMenu.onOpenSettings = openSettings
         wifiMenu.onWiFiChanged = { [weak self] in self?.monitor.refresh() }
         vpnMenu.onVPNChanged = { [weak self] in self?.monitor.refresh() }
         menu.delegate = self
@@ -48,7 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(wifiMenu.item)
         let power = NSMenuItem(); power.view = powerPanel; menu.addItem(power)
         menu.addItem(vpnMenu.item)
-        let devices = NSMenuItem(); devices.view = devicesPanel; menu.addItem(devices)
+        let headphones = NSMenuItem(); headphones.view = headphonesPanel; menu.addItem(headphones)
+        menu.addItem(soundMenu.item)
+        let focus = NSMenuItem(); focus.view = focusPanel; menu.addItem(focus)
         menu.addItem(.separator())
         for menuItem in [systemIconsItem, settingsItem, quitItem] {
             menuItem.target = self; menu.addItem(menuItem)
@@ -104,7 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         powerPanel.update(state)
         wifiMenu.update(status: state)
         vpnMenu.update(status: state)
-        devicesPanel.update(state)
+        headphonesPanel.update(state)
+        soundMenu.update(status: state)
+        focusPanel.update(state)
     }
 
     private func update(_ state: SystemStatus) {
@@ -119,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateMenuRows(monitor.status)
         wifiMenu.prepare()
         vpnMenu.prepare()
+        soundMenu.prepare()
         monitor.setMenuOpen(true)
     }
     func menuDidClose(_ menu: NSMenu) { monitor.setMenuOpen(false) }

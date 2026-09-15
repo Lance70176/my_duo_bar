@@ -11,7 +11,7 @@ import AppKit
         _ = NSApplication.shared
         var opened: [SystemSettings.Page] = []
         for (section, expected) in [(StatusPanel.Section.power, [SystemSettings.Page.battery]),
-                                    (.devices, [.bluetooth, .sound, .focus])] {
+                                    (.headphones, [.bluetooth]), (.focus, [.focus])] {
             let panel = StatusPanel(section: section)
             let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: panel.frame.width, height: panel.frame.height),
                                   styleMask: .borderless, backing: .buffered, defer: false)
@@ -29,7 +29,9 @@ import AppKit
                 row.performClick(nil)
             }
             check(opened == expected, "rows open their settings pages")
-            let lowest = descendants(panel).map { $0.convert($0.bounds, to: panel).minY }.min() ?? 0
+            // Compact rows keep a hidden detail label below them; only drawn views have to fit.
+            let lowest = descendants(panel).filter { !$0.isHiddenOrHasHiddenAncestor }
+                .map { $0.convert($0.bounds, to: panel).minY }.min() ?? 0
             check(lowest >= 0, "rows fit inside their panel block")
         }
 
@@ -81,11 +83,12 @@ import AppKit
               "Wi-Fi off shows only the switch and settings")
         check(wifiMenu.item.subtitle == "已關閉", "the item says Wi-Fi is off")
         vpnChecks()
+        soundChecks()
         L10n.overrideForTesting(nil)
         check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "headphones target Bluetooth settings")
         check(SystemSettings.Page.allCases.allSatisfy { $0.url.scheme == "x-apple.systempreferences" },
               "settings links stay within the system settings application")
-        print("PASS: native settings actions, Wi-Fi and VPN submenus, custom switch and network routing")
+        print("PASS: native settings actions, Wi-Fi, VPN and Sound submenus, custom controls and network routing")
     }
 
     static func spin(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
@@ -171,6 +174,113 @@ import AppKit
     }
 }
 
+extension PanelTests {
+    /// Exercises the Sound submenu against a fake output: the Mac's real volume is never changed.
+    static func soundChecks() {
+        let fake = FakeSoundService(SoundOutput(name: "MacBook Pro 喇叭", volume: 0.5, muted: false, canSetVolume: true, canSetMute: true))
+        let sound = SoundMenuController()
+        sound.service = fake
+        var opened: [SystemSettings.Page] = []
+        sound.onOpenSettings = { opened.append($0) }
+        var state = SystemStatus()
+        state.audio = AudioState(outputName: "MacBook Pro 喇叭", headphoneNames: [], muted: false, volume: 50)
+        sound.update(status: state)
+        check(sound.item.submenu === sound.submenu && sound.item.title == "聲音" && sound.item.subtitle == "MacBook Pro 喇叭 · 50%",
+              "Sound opens a submenu and shows the output and level")
+        check(SoundMenuController.symbol(muted: false, percent: 80) == "speaker.wave.3.fill"
+              && SoundMenuController.symbol(muted: true, percent: 80) == "speaker.slash.fill"
+              && SoundMenuController.symbol(muted: false, percent: 0) == "speaker.fill", "the speaker symbol follows level and mute")
+
+        sound.menuWillOpen(sound.submenu)
+        spin(0.2)
+        check(sound.submenu.items.first?.isSectionHeader == true && sound.submenu.items[1].view === sound.volumeRow
+              && sound.submenu.items[2].view === sound.muteRow && sound.submenu.items.last?.title == "聲音設定…",
+              "the submenu has a header, the slider, the mute row below it and Sound Settings")
+        check(sound.volumeRow.slider.value == 0.5 && sound.volumeRow.levelText == "50%" && sound.volumeRow.deviceText == "MacBook Pro 喇叭",
+              "the slider shows the output's volume")
+        check(!sound.muteRow.toggleSwitch.isOn && sound.muteRow.symbolName == "speaker.wave.2.fill" && sound.muteRow.detailText == "未靜音",
+              "the mute row shows a speaker and its switch is off")
+
+        sound.volumeRow.slider.setValueFromUser(0.8)
+        spin(0.2)
+        check(fake.output.volume == 0.8 && sound.volumeRow.levelText == "80%", "moving the slider sets the volume")
+        for step in 1...20 { sound.volumeRow.slider.setValueFromUser(Float(step) / 20) }
+        spin(0.3)
+        check(fake.output.volume == 1 && fake.volumeWrites < 21, "a fast drag ends on the last value without queuing every step")
+        fake.setExternally(volume: 0.3)
+        sound.reload()
+        spin(0.1)
+        check(sound.volumeRow.slider.value == 1, "a read taken right after a drag doesn't pull the slider back")
+
+        let mute = sound.muteRow
+        mute.mouseUp(with: NSEvent.mouseEvent(with: .leftMouseUp, location: mute.convert(NSPoint(x: 100, y: 20), to: nil),
+                                              modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                                              eventNumber: 0, clickCount: 1, pressure: 0) ?? NSEvent())
+        spin(0.1)
+        check(fake.output.muted == true && mute.toggleSwitch.isOn && mute.symbolName == "speaker.slash.fill"
+              && mute.detailText == "已靜音" && sound.volumeRow.levelText == "已靜音" && sound.volumeRow.slider.dimmed,
+              "clicking the mute row mutes and swaps the speaker icon")
+        sound.volumeRow.slider.setValueFromUser(0.6)
+        spin(0.1)
+        check(fake.output.muted == false && !mute.toggleSwitch.isOn, "raising the volume while muted unmutes")
+
+        spin(SoundMenuController.settleTime + 0.2)
+        fake.setExternally(volume: 0.2)
+        sound.update(status: state)
+        spin(0.2)
+        check(sound.volumeRow.slider.value == 0.2, "after settling, changes made elsewhere show up while the submenu is open")
+
+        fake.setExternally(volume: 0)
+        sound.reload()
+        spin(0.2)
+        check(mute.toggleSwitch.isOn, "zero volume counts as muted")
+        sound.toggleMute()
+        spin(0.1)
+        check(fake.output.muted == false && fake.output.volume == SoundMenuController.unmuteVolume,
+              "unmuting a silent output brings the volume back up")
+
+        spin(SoundMenuController.settleTime + 0.2)
+        fake.replace(SoundOutput(name: "HDMI", volume: 0.4, muted: nil, canSetVolume: true, canSetMute: false))
+        sound.reload()
+        spin(0.2)
+        sound.toggleMute()
+        spin(0.1)
+        check(fake.output.volume == 0 && mute.toggleSwitch.isOn, "an output without a mute switch is muted by zeroing its volume")
+        sound.toggleMute()
+        spin(0.1)
+        check(fake.output.volume == 0.4 && !mute.toggleSwitch.isOn, "and unmuting restores the earlier level")
+
+        spin(SoundMenuController.settleTime + 0.2)
+        fake.replace(SoundOutput(name: "Display", volume: nil, muted: nil, canSetVolume: false, canSetMute: false))
+        sound.reload()
+        spin(0.2)
+        let writes = fake.volumeWrites
+        sound.volumeRow.slider.setValueFromUser(0.9)
+        sound.toggleMute()
+        spin(0.1)
+        check(!sound.volumeRow.slider.isEnabled && !mute.toggleSwitch.isEnabled && fake.volumeWrites == writes
+              && mute.detailText == "此裝置無法靜音" && sound.volumeRow.levelText == "—",
+              "an output with no volume control disables both controls")
+
+        L10n.overrideForTesting(.ja)
+        sound.rebuild()
+        check(sound.submenu.items.first?.title == "サウンド" && sound.submenu.items.last?.title == "サウンド設定…",
+              "the submenu follows the app language")
+        L10n.overrideForTesting(.zhHant)
+
+        sound.submenu.items.last.map { item in _ = (item.target as? NSObject)?.perform(item.action) }
+        check(opened == [.sound], "Sound Settings opens the Sound page")
+        sound.menuDidClose(sound.submenu)
+
+        let slider = MenuSlider()
+        slider.frame = NSRect(x: 0, y: 0, width: 116, height: MenuSlider.height)
+        check(slider.value(atX: 0) == 0 && slider.value(atX: 58) == 0.5 && slider.value(atX: 500) == 1, "slider positions map to 0…1")
+        slider.value = 3
+        check(slider.value == 1, "slider values are clamped")
+        check(slider.accessibilityPerformDecrement() && slider.value == 1 - MenuSlider.step, "VoiceOver can step the slider")
+    }
+}
+
 final class ActionTarget: NSObject {
     let body: () -> Void
     init(_ body: @escaping () -> Void) { self.body = body }
@@ -205,6 +315,38 @@ final class FakeVPNService: VPNServing, @unchecked Sendable {
         lock.withLock {
             _calls.append("stop \(id)")
             if let index = configs.firstIndex(where: { $0.id == id }) { configs[index].status = .disconnected }
+            return true
+        }
+    }
+}
+
+/// In-memory output device for tests.
+final class FakeSoundService: SoundServing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _output: SoundOutput
+    private var _volumeWrites = 0
+    init(_ output: SoundOutput) { _output = output }
+
+    var output: SoundOutput { lock.withLock { _output } }
+    var volumeWrites: Int { lock.withLock { _volumeWrites } }
+    func setExternally(volume: Float) { lock.withLock { _output.volume = volume } }
+    func replace(_ output: SoundOutput) { lock.withLock { _output = output } }
+
+    func read() -> SoundOutput { output }
+    func setVolume(_ volume: Float) -> Bool {
+        // A little latency, like a real device, so drags coalesce.
+        Thread.sleep(forTimeInterval: 0.01)
+        return lock.withLock {
+            _volumeWrites += 1
+            guard _output.canSetVolume else { return false }
+            _output.volume = volume
+            return true
+        }
+    }
+    func setMuted(_ muted: Bool) -> Bool {
+        lock.withLock {
+            guard _output.canSetMute else { return false }
+            _output.muted = muted
             return true
         }
     }
