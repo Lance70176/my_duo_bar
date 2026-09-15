@@ -1,4 +1,5 @@
 import AppKit
+import CoreAudio
 
 @main @MainActor struct PanelTests {
     static func check(_ value: Bool, _ message: String) {
@@ -11,7 +12,7 @@ import AppKit
         _ = NSApplication.shared
         var opened: [SystemSettings.Page] = []
         for (section, expected) in [(StatusPanel.Section.power, [SystemSettings.Page.battery]),
-                                    (.headphones, [.bluetooth]), (.focus, [.focus])] {
+                                    (.focus, [.focus])] {
             let panel = StatusPanel(section: section)
             let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: panel.frame.width, height: panel.frame.height),
                                   styleMask: .borderless, backing: .buffered, defer: false)
@@ -84,11 +85,12 @@ import AppKit
         check(wifiMenu.item.subtitle == "已關閉", "the item says Wi-Fi is off")
         vpnChecks()
         soundChecks()
+        outputChecks()
         L10n.overrideForTesting(nil)
         check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "headphones target Bluetooth settings")
         check(SystemSettings.Page.allCases.allSatisfy { $0.url.scheme == "x-apple.systempreferences" },
               "settings links stay within the system settings application")
-        print("PASS: native settings actions, Wi-Fi, VPN and Sound submenus, custom controls and network routing")
+        print("PASS: native settings actions, Wi-Fi, VPN, Headphones and Sound submenus, custom controls and network routing")
     }
 
     static func spin(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
@@ -281,6 +283,57 @@ extension PanelTests {
     }
 }
 
+extension PanelTests {
+    /// Exercises the Headphones submenu against fake devices: the real default output is never changed.
+    static func outputChecks() {
+        let speakers = AudioOutputDevice(id: 1, name: "MacBook Pro 喇叭", symbol: "speaker.wave.2.fill", isHeadphone: false, isDefault: true)
+        let airpods = AudioOutputDevice(id: 2, name: "AirPods Pro", symbol: "airpodspro", isHeadphone: true, isDefault: false)
+        let fake = FakeOutputDeviceService([speakers, airpods])
+        let output = OutputMenuController()
+        output.service = fake
+        var opened: [SystemSettings.Page] = []
+        var changes = 0
+        output.onOpenSettings = { opened.append($0) }
+        output.onOutputChanged = { changes += 1 }
+        var state = SystemStatus()
+        state.audio.headphoneNames = ["AirPods Pro"]
+        output.update(status: state)
+        check(output.item.submenu === output.submenu && output.item.title == "耳機" && output.item.subtitle == "AirPods Pro",
+              "Headphones opens a submenu and shows the connected headphones")
+
+        output.menuWillOpen(output.submenu)
+        spin(0.2)
+        let rows = { output.submenu.items.filter { $0.representedObject is NSNumber } }
+        check(output.submenu.items.first?.isSectionHeader == true && output.submenu.items.first?.title == "輸出裝置"
+              && output.submenu.items.last?.title == "藍牙設定…", "the submenu has an Output header and ends with Bluetooth Settings")
+        check(rows().map(\.title) == ["MacBook Pro 喇叭", "AirPods Pro"] && rows().map(\.state) == [.on, .off] && rows().allSatisfy { $0.image != nil },
+              "every output device is listed with an icon and the current one checked")
+
+        rows()[1].target.map { _ = ($0 as? NSObject)?.perform(rows()[1].action, with: rows()[1]) }
+        spin(0.2)
+        check(fake.selections == [2] && rows().map(\.state) == [.off, .on] && changes == 1, "choosing a device makes it the default output")
+        output.select(id: 2)
+        spin(0.1)
+        check(fake.selections == [2], "choosing the current device does nothing")
+
+        fake.refuse = true
+        output.select(id: 1)
+        spin(0.2)
+        check(opened == [.sound] && rows().map(\.state) == [.off, .on], "a refused switch opens Sound settings and keeps the check")
+
+        fake.replace([speakers])
+        output.update(status: state)
+        spin(0.2)
+        check(rows().map(\.title) == ["MacBook Pro 喇叭"], "a device that disconnects leaves the open submenu")
+        output.menuDidClose(output.submenu)
+
+        check(AudioOutputDevice.symbol(name: "AirPods Max", transport: nil, headphone: true) == "airpodsmax"
+              && AudioOutputDevice.symbol(name: "LG HDR 4K", transport: kAudioDeviceTransportTypeHDMI, headphone: false) == "tv"
+              && AudioOutputDevice.symbol(name: "Sony WH-1000XM5", transport: kAudioDeviceTransportTypeBluetooth, headphone: true) == "headphones",
+              "device icons follow the device kind")
+    }
+}
+
 final class ActionTarget: NSObject {
     let body: () -> Void
     init(_ body: @escaping () -> Void) { self.body = body }
@@ -347,6 +400,29 @@ final class FakeSoundService: SoundServing, @unchecked Sendable {
         lock.withLock {
             guard _output.canSetMute else { return false }
             _output.muted = muted
+            return true
+        }
+    }
+}
+
+/// In-memory output devices for tests.
+final class FakeOutputDeviceService: OutputDeviceServing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _devices: [AudioOutputDevice]
+    private var _selections: [UInt32] = []
+    private var _refuse = false
+    init(_ devices: [AudioOutputDevice]) { _devices = devices }
+
+    var selections: [UInt32] { lock.withLock { _selections } }
+    var refuse: Bool { get { lock.withLock { _refuse } } set { lock.withLock { _refuse = newValue } } }
+    func replace(_ devices: [AudioOutputDevice]) { lock.withLock { _devices = devices } }
+
+    func outputDevices() -> [AudioOutputDevice] { lock.withLock { _devices } }
+    func selectOutput(id: UInt32) -> Bool {
+        lock.withLock {
+            guard !_refuse else { return false }
+            _selections.append(id)
+            for index in _devices.indices { _devices[index].isDefault = _devices[index].id == id }
             return true
         }
     }

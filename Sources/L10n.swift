@@ -190,6 +190,11 @@ enum L10n {
     static var volumeUnsupported: String { pick("此裝置無法調整音量", "This device's volume can't be changed", "このデバイスの音量は変更できません") }
     static var muteToggle: String { pick("切換靜音", "Turn mute on or off", "消音を切り替え") }
 
+    // MARK: Headphones submenu
+    static var outputDevices: String { pick("輸出裝置", "Output", "出力装置") }
+    static var noOutputDevices: String { pick("沒有可用的輸出裝置", "No Output Devices", "出力装置がありません") }
+    static var bluetoothSettingsMenu: String { pick("藍牙設定…", "Bluetooth Settings…", "Bluetooth 設定…") }
+
     // MARK: Icon guide
     static var iconGuide: String { pick("圖示說明", "Icon Guide", "アイコンの見かた") }
     static var guideRing: String {

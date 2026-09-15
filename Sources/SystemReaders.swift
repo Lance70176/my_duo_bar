@@ -103,15 +103,7 @@ enum SystemReaders {
             let streams: [AudioStreamID] = values(device, kAudioDevicePropertyStreams, scope: kAudioDevicePropertyScopeOutput)
             guard !streams.isEmpty else { continue }
             let name = string(device, kAudioObjectPropertyName) ?? L10n.headphones
-            let headphoneTerminal = streams.contains { stream in
-                let terminal: UInt32? = value(stream, kAudioStreamPropertyTerminalType)
-                return terminal == kAudioStreamTerminalTypeHeadphones
-            }
-            let transport: UInt32? = value(device, kAudioDevicePropertyTransportType)
-            let wireless = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
-            // Match every shipped language (plus Simplified Chinese): device names follow the locale they were paired under.
-            let headphoneName = ["airpods", "beats", "buds", "headphone", "headset", "earphone", "耳機", "耳机", "ヘッドホン", "ヘッドフォン", "イヤホン", "wh-1000", "wf-1000"].contains { name.lowercased().contains($0) }
-            if headphoneTerminal || (wireless && headphoneName) { result.headphoneNames.append(name) }
+            if isHeadphone(device, name: name, streams: streams) { result.headphoneNames.append(name) }
         }
         result.headphoneNames = Array(Set(result.headphoneNames)).sorted()
         guard let device = defaultOutput, device != kAudioObjectUnknown else { return result }
@@ -131,6 +123,19 @@ enum SystemReaders {
         // Volume zero is a silent output even when a device exposes no mute switch.
         if volume == 0 { result.muted = true }
         return result
+    }
+
+    /// A headphone output: a headphone terminal, or a wireless device with a headphone-like name.
+    static func isHeadphone(_ device: AudioDeviceID, name: String, streams: [AudioStreamID]) -> Bool {
+        let headphoneTerminal = streams.contains { stream in
+            let terminal: UInt32? = value(stream, kAudioStreamPropertyTerminalType)
+            return terminal == kAudioStreamTerminalTypeHeadphones
+        }
+        let transport: UInt32? = value(device, kAudioDevicePropertyTransportType)
+        let wireless = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
+        // Match every shipped language (plus Simplified Chinese): device names follow the locale they were paired under.
+        let headphoneName = ["airpods", "beats", "buds", "headphone", "headset", "earphone", "耳機", "耳机", "ヘッドホン", "ヘッドフォン", "イヤホン", "wh-1000", "wf-1000"].contains { name.lowercased().contains($0) }
+        return headphoneTerminal || (wireless && headphoneName)
     }
 
     static func address(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,

@@ -130,15 +130,14 @@ final class StatusPanelHeader: NSView {
     func update(preview: Bool = false) { mode.stringValue = preview ? L10n.sampleStatus : L10n.thisMac }
 }
 
-/// A block of status rows. Wi-Fi, VPN and Sound are native menu items between blocks so they can open submenus:
-/// `.power` is the battery row plus the divider under it, then `.headphones` and `.focus` around Sound.
+/// A block of status rows. Wi-Fi, VPN, Headphones and Sound are native menu items so they can open submenus:
+/// `.power` is the battery row plus the divider under it, `.focus` is the Focus row after Sound.
 final class StatusPanel: NSView {
-    enum Section { case power, headphones, focus }
+    enum Section { case power, focus }
     static let width: CGFloat = 314
     let section: Section
     var onOpenSettings: ((SystemSettings.Page) -> Void)?
     private let battery = StatusRow(height: 55, destination: .battery)
-    private let headphones = StatusRow(height: 35, destination: .bluetooth, compact: true)
     private let focus = StatusRow(height: 35, destination: .focus, compact: true)
     override var allowsVibrancy: Bool { true }
 
@@ -153,9 +152,6 @@ final class StatusPanel: NSView {
             separator.heightAnchor.constraint(equalToConstant: 1).isActive = true
             views = [battery, separator]
             height = 2 + 55 + 6
-        case .headphones:
-            views = [headphones]
-            height = 35
         case .focus:
             views = [focus]
             height = 35 + 21
@@ -187,8 +183,6 @@ final class StatusPanel: NSView {
             let batterySymbol = state.battery.charging ? "battery.100percent.bolt" : "battery.75percent"
             battery.update(symbol: state.battery.present ? batterySymbol : "powerplug",
                            title: L10n.battery, detail: state.battery.detail, value: state.battery.title)
-        case .headphones:
-            headphones.update(symbol: "headphones", title: L10n.headphones, value: state.audio.headphoneTitle, active: state.audio.headphoneActive)
         case .focus:
             focus.update(symbol: state.focus.symbol, title: L10n.focus, value: state.focus.title, active: state.focus.isActive)
             if case .unavailable(let reason) = state.focus { focus.toolTip = reason }

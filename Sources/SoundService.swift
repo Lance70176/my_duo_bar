@@ -71,3 +71,59 @@ enum SoundService {
         return AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<T>.size), &value) == noErr
     }
 }
+
+/// An output device the Headphones submenu can switch to.
+struct AudioOutputDevice: Equatable, Sendable {
+    var id: UInt32
+    var name: String
+    var symbol: String
+    var isHeadphone: Bool
+    var isDefault: Bool
+
+    /// SF Symbol for a device, from its name and how it is connected.
+    static func symbol(name: String, transport: UInt32?, headphone: Bool) -> String {
+        let lower = name.lowercased()
+        if lower.contains("airpods max") { return "airpodsmax" }
+        if lower.contains("airpods pro") { return "airpodspro" }
+        if lower.contains("airpods") { return "airpods" }
+        if lower.contains("beats") { return "beats.headphones" }
+        if headphone { return "headphones" }
+        switch transport {
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort: return "tv"
+        case kAudioDeviceTransportTypeAirPlay: return "airplayaudio"
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE, kAudioDeviceTransportTypeUSB: return "hifispeaker.fill"
+        case kAudioDeviceTransportTypeVirtual, kAudioDeviceTransportTypeAggregate: return "waveform"
+        default: return "speaker.wave.2.fill"
+        }
+    }
+}
+
+extension SoundService {
+    /// Devices that can play sound and be chosen as the default output, as the system Sound menu lists them.
+    static func outputDevices() -> [AudioOutputDevice] {
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        let devices: [AudioDeviceID] = SystemReaders.values(system, kAudioHardwarePropertyDevices)
+        let current = defaultOutput()
+        return devices.compactMap { device -> AudioOutputDevice? in
+            let alive: UInt32 = SystemReaders.value(device, kAudioDevicePropertyDeviceIsAlive) ?? 0
+            let hidden: UInt32 = SystemReaders.value(device, kAudioDevicePropertyIsHidden) ?? 0
+            let canBeDefault: UInt32 = SystemReaders.value(device, kAudioDevicePropertyDeviceCanBeDefaultDevice,
+                                                           scope: kAudioDevicePropertyScopeOutput) ?? 0
+            let streams: [AudioStreamID] = SystemReaders.values(device, kAudioDevicePropertyStreams, scope: kAudioDevicePropertyScopeOutput)
+            guard alive != 0, hidden == 0, canBeDefault != 0, !streams.isEmpty,
+                  let name = SystemReaders.string(device, kAudioObjectPropertyName) else { return nil }
+            let headphone = SystemReaders.isHeadphone(device, name: name, streams: streams)
+            let transport: UInt32? = SystemReaders.value(device, kAudioDevicePropertyTransportType)
+            return AudioOutputDevice(id: device, name: name, symbol: AudioOutputDevice.symbol(name: name, transport: transport, headphone: headphone),
+                                     isHeadphone: headphone, isDefault: device == current)
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Makes a device the default output, like choosing it in the system Sound menu.
+    @discardableResult
+    static func selectOutput(id: UInt32) -> Bool {
+        let address = SystemReaders.address(kAudioHardwarePropertyDefaultOutputDevice)
+        return set(AudioObjectID(kAudioObjectSystemObject), address, AudioDeviceID(id))
+    }
+}
