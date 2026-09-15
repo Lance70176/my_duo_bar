@@ -21,6 +21,11 @@ cp -X "$DUOBAR_ROOT/Resources/Info.plist" "$DUOBAR_APP/Contents/Info.plist"
 # Keep the bundle's minimum system version in lockstep with the compiler deployment target.
 /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $DUOBAR_DEPLOYMENT_TARGET" "$DUOBAR_APP/Contents/Info.plist"
 cp -X "$DUOBAR_ROOT/Resources/AppIcon.icns" "$DUOBAR_APP/Contents/Resources/AppIcon.icns"
+for DUOBAR_LPROJ in zh-Hant en ja; do
+    mkdir -p "$DUOBAR_APP/Contents/Resources/$DUOBAR_LPROJ.lproj"
+    cp -X "$DUOBAR_ROOT/Resources/$DUOBAR_LPROJ.lproj/InfoPlist.strings" "$DUOBAR_APP/Contents/Resources/$DUOBAR_LPROJ.lproj/InfoPlist.strings"
+    /usr/bin/plutil -lint "$DUOBAR_APP/Contents/Resources/$DUOBAR_LPROJ.lproj/InfoPlist.strings"
+done
 /usr/bin/plutil -lint "$DUOBAR_APP/Contents/Info.plist"
 /usr/bin/codesign --force --sign - "$DUOBAR_APP"
 "$DUOBAR_ROOT/scripts/verify-app.sh" "$DUOBAR_APP"

@@ -6,10 +6,12 @@
     <key>CFBundleIdentifier</key><string>com.rex.myduobar</string>
     <key>CFBundleName</key><string>MyDuoBar</string>
     <key>CFBundleDisplayName</key><string>MyDuoBar</string>
+    <key>CFBundleDevelopmentRegion</key><string>zh-Hant</string>
+    <key>CFBundleLocalizations</key><array><string>zh-Hant</string><string>en</string><string>ja</string></array>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.1.0</string>
-    <key>CFBundleVersion</key><string>10</string>
+    <key>CFBundleShortVersionString</key><string>1.2.0</string>
+    <key>CFBundleVersion</key><string>11</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>

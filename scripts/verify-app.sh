@@ -1,12 +1,16 @@
 #!/bin/zsh
 set -euo pipefail
 DUOBAR_APP="${1:?Usage: verify-app.sh /path/to/MyDuoBar.app}"
-# A distributable app contains only these four files. Reject stale build files,
+# A distributable app contains only these files: executable, Info.plist, icon, the three
+# localized permission-prompt tables and the signature. Reject stale build files,
 # embedded tools and symlinks, including when packaging with --skip-build.
 DUOBAR_ACTUAL=$(cd "$DUOBAR_APP" && /usr/bin/find . -mindepth 1 ! -type d | LC_ALL=C /usr/bin/sort)
 DUOBAR_EXPECTED='./Contents/Info.plist
 ./Contents/MacOS/MyDuoBar
 ./Contents/Resources/AppIcon.icns
+./Contents/Resources/en.lproj/InfoPlist.strings
+./Contents/Resources/ja.lproj/InfoPlist.strings
+./Contents/Resources/zh-Hant.lproj/InfoPlist.strings
 ./Contents/_CodeSignature/CodeResources'
 if [[ "$DUOBAR_ACTUAL" != "$DUOBAR_EXPECTED" ]]; then
     print -u2 'Unexpected application contents; rebuild before packaging.'
@@ -31,4 +35,4 @@ if [[ -n "$DUOBAR_EXTERNAL" ]]; then
     print -u2 -- "$DUOBAR_EXTERNAL"
     exit 1
 fi
-print 'Verified: four app files, both architectures, valid signature, system libraries only.'
+print 'Verified: expected app files, both architectures, valid signature, system libraries only.'

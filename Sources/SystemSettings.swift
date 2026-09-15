@@ -6,14 +6,14 @@ enum SystemSettings {
 
         var title: String {
             switch self {
-            case .wifi: return "Wi-Fi 設定"
-            case .network: return "網路設定"
-            case .battery: return "電池設定"
-            case .vpn: return "VPN 設定"
-            case .bluetooth: return "藍牙設定"
-            case .sound: return "聲音設定"
-            case .focus: return "專注模式設定"
-            case .menubar: return "選單列設定"
+            case .wifi: return L10n.wifiSettings
+            case .network: return L10n.networkSettings
+            case .battery: return L10n.batterySettings
+            case .vpn: return L10n.vpnSettings
+            case .bluetooth: return L10n.bluetoothSettings
+            case .sound: return L10n.soundSettings
+            case .focus: return L10n.focusSettings
+            case .menubar: return L10n.menuBarSettings
             }
         }
 

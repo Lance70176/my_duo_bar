@@ -7,14 +7,14 @@ enum FocusState: Equatable {
     var isActive: Bool { self == .active }
     var title: String {
         switch self {
-        case .off: return "未開啟"
-        case .active: return "已開啟"
-        case .unavailable: return "狀態未共享"
+        case .off: return L10n.off
+        case .active: return L10n.on
+        case .unavailable: return L10n.notShared
         }
     }
     var symbol: String { isActive ? "moon.fill" : "moon" }
     static func shared(_ value: Bool?) -> FocusState {
-        guard let value else { return .unavailable("系統尚未共享專注狀態") }
+        guard let value else { return .unavailable(L10n.focusNotSharedYet) }
         return value ? .active : .off
     }
 }
@@ -28,15 +28,15 @@ struct BatteryState: Equatable {
     var lowPowerMode = false
     // AC can be connected before the battery starts charging, or while charging is paused.
     var connectedToPower: Bool { present && (externalPower || charging) }
-    var title: String { percent.map { "\($0)%" } ?? (present ? "讀取中" : "外接電源") }
+    var title: String { percent.map { "\($0)%" } ?? (present ? L10n.reading : L10n.externalPower) }
     var detail: String {
-        if !present { return "此 Mac 沒有內建電池" }
-        if charging { return "正在充電" }
-        if externalPower { return percent == 100 ? "電量已充滿" : "已接上電源 · 未充電" }
+        if !present { return L10n.noInternalBattery }
+        if charging { return L10n.charging }
+        if externalPower { return percent == 100 ? L10n.fullyCharged : L10n.pluggedInNotCharging }
         if let minutesRemaining, minutesRemaining > 0 {
-            return "電池供電 · 約 \(minutesRemaining / 60) 小時 \(minutesRemaining % 60) 分鐘"
+            return L10n.onBattery(hours: minutesRemaining / 60, minutes: minutesRemaining % 60)
         }
-        return "電池供電"
+        return L10n.onBattery
     }
 }
 
@@ -49,29 +49,29 @@ struct WiFiState: Equatable {
     var rssi: Int?
     var route: NetworkLink = .unknown
     var title: String {
-        if associated { return ssid ?? "已連線 Wi-Fi" }
-        if route == .ethernet { return "乙太網路已連線" }
-        if !available { return "無 Wi-Fi 介面" }
-        return powered ? "Wi-Fi 未連線" : "Wi-Fi 已關閉"
+        if associated { return ssid ?? L10n.wifiConnected }
+        if route == .ethernet { return L10n.ethernetConnected }
+        if !available { return L10n.noWiFiInterface }
+        return powered ? L10n.wifiNotConnected : L10n.wifiOff
     }
     var detail: String {
         if associated {
             let quality = signalQuality
-            return (ssid == nil ? "網路名稱受系統保護 · " : "") + quality
+            return (ssid == nil ? L10n.networkNameHidden : "") + quality
         }
-        if route == .ethernet { return "正在使用有線網路" }
-        return route == .offline ? "沒有可用網路路徑" : "開啟 Wi-Fi 設定以管理連線"
+        if route == .ethernet { return L10n.usingWiredNetwork }
+        return route == .offline ? L10n.noNetworkPath : L10n.openWiFiSettingsHint
     }
     var signalLevel: Int {
         guard associated else { return 0 }
         return rssi.map { $0 >= -60 ? 3 : ($0 >= -72 ? 2 : 1) } ?? 3
     }
     var signalQuality: String {
-        guard associated else { return powered ? "未連線" : "已關閉" }
-        guard let rssi else { return "已連線" }
-        if rssi >= -60 { return "訊號很好" }
-        if rssi >= -72 { return "訊號一般" }
-        return "訊號較弱"
+        guard associated else { return powered ? L10n.notConnected : L10n.turnedOff }
+        guard let rssi else { return L10n.connected }
+        if rssi >= -60 { return L10n.signalStrong }
+        if rssi >= -72 { return L10n.signalFair }
+        return L10n.signalWeak
     }
     var symbol: String {
         if associated { return "wifi" }
@@ -88,26 +88,26 @@ struct VPNState: Equatable {
     var systemProxy = false
     var active: Bool { !names.isEmpty || routedTunnel || systemProxy }
     var title: String {
-        if !names.isEmpty { return names.joined(separator: "、") }
-        if routedTunnel { return "已連線" }
-        if systemProxy { return "系統代理已開啟" }
-        if !available { return "狀態不可用" }
-        if hasUnidentifiedTunnel { return "偵測到未識別的通道" }
-        return "未連線"
+        if !names.isEmpty { return names.joined(separator: L10n.listSeparator) }
+        if routedTunnel { return L10n.connected }
+        if systemProxy { return L10n.systemProxyOn }
+        if !available { return L10n.unavailable }
+        if hasUnidentifiedTunnel { return L10n.unidentifiedTunnel }
+        return L10n.notConnected
     }
 }
 
 struct AudioState: Equatable {
-    var outputName = "聲音輸出不可用"
+    var outputName = L10n.soundOutputUnavailable
     var headphoneNames: [String] = []
     var muted: Bool?
     var volume: Int?
     var headphoneActive: Bool { !headphoneNames.isEmpty }
-    var headphoneTitle: String { headphoneActive ? headphoneNames.joined(separator: "、") : "未連線" }
+    var headphoneTitle: String { headphoneActive ? headphoneNames.joined(separator: L10n.listSeparator) : L10n.notConnected }
     var soundTitle: String {
-        if muted == true { return "已靜音" }
+        if muted == true { return L10n.muted }
         if let volume { return "\(volume)%" }
-        return muted == false ? "未靜音" : "裝置不提供音量狀態"
+        return muted == false ? L10n.notMuted : L10n.noVolumeInfo
     }
 }
 
@@ -116,9 +116,9 @@ enum StatusGlyph: String, CaseIterable {
     var title: String {
         switch self {
         case .vpn: return "VPN"
-        case .headphones: return "耳機"
-        case .mute: return "靜音"
-        case .focus: return "專注"
+        case .headphones: return L10n.headphones
+        case .mute: return L10n.mute
+        case .focus: return L10n.focus
         }
     }
     var symbol: String {
@@ -139,10 +139,10 @@ enum StatusGlyph: String, CaseIterable {
     }
     var label: String {
         switch self {
-        case .vpn: return "VPN 已連線"
-        case .headphones: return "耳機已連線"
-        case .mute: return "已靜音"
-        case .focus: return "專注已開啟"
+        case .vpn: return L10n.vpnConnected
+        case .headphones: return L10n.headphonesConnected
+        case .mute: return L10n.muted
+        case .focus: return L10n.focusOn
         }
     }
 }
@@ -152,7 +152,7 @@ struct SystemStatus: Equatable {
     var wifi = WiFiState()
     var vpn = VPNState()
     var audio = AudioState()
-    var focus: FocusState = .unavailable("需要讀取系統專注狀態")
+    var focus: FocusState = .unavailable(L10n.focusNeedsReading)
     var glyphs: [StatusGlyph] {
         var items: [StatusGlyph] = []
         if vpn.active { items.append(.vpn) }
@@ -162,13 +162,13 @@ struct SystemStatus: Equatable {
         return items
     }
     var accessibilitySummary: String {
-        (["MyDuoBar", "電量 \(battery.title)", wifi.title] + glyphs.map(\.label)).joined(separator: "，")
+        (["MyDuoBar", L10n.batteryLevel(battery.title), wifi.title] + glyphs.map(\.label)).joined(separator: L10n.summarySeparator)
     }
     static func preview() -> SystemStatus {
         var s = SystemStatus()
         s.battery = BatteryState(present: true, percent: 87, charging: false, externalPower: false, minutesRemaining: nil)
         s.wifi = WiFiState(available: true, powered: true, associated: true, ssid: "Home Wi-Fi", rssi: -48, route: .wifi)
-        s.vpn.names = ["個人 VPN"]
+        s.vpn.names = [L10n.personalVPN]
         s.audio = AudioState(outputName: "AirPods Pro", headphoneNames: ["AirPods Pro"], muted: true, volume: 0)
         s.focus = .active
         return s

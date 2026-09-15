@@ -1,0 +1,3 @@
+"NSFocusStatusUsageDescription" = "讀取是否開啟專注模式，開啟時點亮選單列中的專注圓點。不讀取具體專注模式或個人內容。";
+"NSLocationUsageDescription" = "僅用於讀取已連線的 Wi-Fi 名稱。MyDuoBar 不會取得地理座標、不儲存或上傳位置。";
+"NSLocationWhenInUseUsageDescription" = "僅用於讀取已連線的 Wi-Fi 名稱。不會取得地理座標。";

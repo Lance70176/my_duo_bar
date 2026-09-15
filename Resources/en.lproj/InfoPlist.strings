@@ -1,0 +1,3 @@
+"NSFocusStatusUsageDescription" = "Reads whether Focus is on to light the Focus dot in the menu bar. It never reads which Focus mode is active or any personal content.";
+"NSLocationUsageDescription" = "Used only to read the name of the connected Wi-Fi network. MyDuoBar never reads your coordinates and never stores or uploads your location.";
+"NSLocationWhenInUseUsageDescription" = "Used only to read the name of the connected Wi-Fi network. Your coordinates are never read.";

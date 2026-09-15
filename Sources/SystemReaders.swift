@@ -86,7 +86,7 @@ enum SystemReaders {
     static func focus() -> FocusState {
         let center = INFocusStatusCenter.default
         guard center.authorizationStatus == .authorized else {
-            return .unavailable("在 MyDuoBar 設定中允許讀取專注狀態。僅讀取是否專注，不區分具體模式。")
+            return .unavailable(L10n.focusAllowInSettings)
         }
         return .shared(center.focusStatus.isFocused)
     }
@@ -101,20 +101,20 @@ enum SystemReaders {
             guard alive != 0 else { continue }
             let streams: [AudioStreamID] = values(device, kAudioDevicePropertyStreams, scope: kAudioDevicePropertyScopeOutput)
             guard !streams.isEmpty else { continue }
-            let name = string(device, kAudioObjectPropertyName) ?? "耳機"
+            let name = string(device, kAudioObjectPropertyName) ?? L10n.headphones
             let headphoneTerminal = streams.contains { stream in
                 let terminal: UInt32? = value(stream, kAudioStreamPropertyTerminalType)
                 return terminal == kAudioStreamTerminalTypeHeadphones
             }
             let transport: UInt32? = value(device, kAudioDevicePropertyTransportType)
             let wireless = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
-            // Keep both scripts: Bluetooth device names follow the locale they were paired under.
-            let headphoneName = ["airpods", "beats", "buds", "headphone", "headset", "earphone", "耳機", "耳机", "wh-1000", "wf-1000"].contains { name.lowercased().contains($0) }
+            // Match every shipped language (plus Simplified Chinese): device names follow the locale they were paired under.
+            let headphoneName = ["airpods", "beats", "buds", "headphone", "headset", "earphone", "耳機", "耳机", "ヘッドホン", "ヘッドフォン", "イヤホン", "wh-1000", "wf-1000"].contains { name.lowercased().contains($0) }
             if headphoneTerminal || (wireless && headphoneName) { result.headphoneNames.append(name) }
         }
         result.headphoneNames = Array(Set(result.headphoneNames)).sorted()
         guard let device = defaultOutput, device != kAudioObjectUnknown else { return result }
-        result.outputName = string(device, kAudioObjectPropertyName) ?? "目前的輸出裝置"
+        result.outputName = string(device, kAudioObjectPropertyName) ?? L10n.currentOutputDevice
         let mute: UInt32? = value(device, kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeOutput)
         result.muted = mute.map { $0 != 0 }
         let master: Float32? = value(device, kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput)

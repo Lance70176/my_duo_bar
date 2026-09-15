@@ -1,0 +1,3 @@
+"NSFocusStatusUsageDescription" = "集中モードがオンかどうかを読み取り、メニューバーの集中モードのドットを点灯します。どのモードかや個人的な内容は読み取りません。";
+"NSLocationUsageDescription" = "接続中の Wi-Fi ネットワーク名を読み取るためだけに使用します。MyDuoBar は座標を取得せず、位置情報を保存・送信しません。";
+"NSLocationWhenInUseUsageDescription" = "接続中の Wi-Fi ネットワーク名を読み取るためだけに使用します。座標は取得しません。";

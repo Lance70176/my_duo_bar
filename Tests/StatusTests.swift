@@ -8,6 +8,8 @@ import Foundation
         guard value() else { fputs("FAIL: \(description)\n", stderr); exit(1) }
     }
     static func main() {
+        // String checks below are written in Traditional Chinese; pin it so the host language doesn't matter.
+        L10n.overrideForTesting(.zhHant)
         for mask in 0..<16 {
             var s = SystemStatus()
             s.vpn.names = mask & 1 == 0 ? [] : ["VPN"]
@@ -38,8 +40,10 @@ import Foundation
         check(layout.visible == [.headphones, .mute, .focus], "hidden VPN leaves other positions ordered")
         layout.hidden = Set(StatusGlyph.allCases)
         check(layout.visible.isEmpty, "all dots can be hidden")
-        let suite = "com.rex.myduobar.tests." + UUID().uuidString
+        // A fixed suite name: macOS can leave an empty plist per domain, so random names would pile up.
+        let suite = "com.rex.myduobar.tests"
         let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = DotPreferences(defaults: defaults)
         preferences.move(.focus, by: -1)
@@ -96,6 +100,35 @@ import Foundation
         check(WiFiState(available: true, powered: false, route: .ethernet).title == "乙太網路已連線", "Ethernet is not shown as offline")
         check(BatteryState().percent == nil && BatteryState().title == "外接電源", "desktop Mac never fabricates 100 percent")
         check(AudioState().muted == nil, "unsupported mute state is not fabricated")
+        check(BatteryState(present: true, percent: 50, minutesRemaining: 125).detail == "電池供電 · 約 2 小時 5 分鐘",
+              "Traditional Chinese battery estimate")
+
+        L10n.overrideForTesting(.en)
+        check(wifi.signalQuality == "Strong Signal", "English signal wording")
+        check(wifi.title == "Connected to Wi-Fi", "English redacted SSID")
+        check(BatteryState().title == "External Power", "English desktop power")
+        check(BatteryState(present: true, percent: 50, minutesRemaining: 125).detail == "On Battery · About 2 hr 5 min",
+              "English battery estimate")
+        var english = SystemStatus(); english.vpn.names = ["B", "A"]
+        check(english.vpn.title == "B, A", "English list separator")
+        check(StatusGlyph.focus.title == "Focus" && FocusState.off.title == "Off", "English dot and Focus titles")
+
+        L10n.overrideForTesting(.ja)
+        check(wifi.signalQuality == "電波良好", "Japanese signal wording")
+        check(BatteryState().title == "外部電源", "Japanese desktop power")
+        check(StatusGlyph.focus.title == "集中モード" && FocusState.active.title == "オン", "Japanese dot and Focus titles")
+        check(AudioState(muted: true).soundTitle == "消音中", "Japanese mute wording")
+
+        // Every language must supply every phrase; spot-check that none fall back to another language.
+        var seen: [AppLanguage: String] = [:]
+        for language in [AppLanguage.zhHant, .en, .ja] {
+            L10n.overrideForTesting(language)
+            seen[language] = L10n.statusAccessNote
+            check(!L10n.quit.isEmpty && !L10n.focusNotSharedBody.isEmpty, "\(language) has menu and alert text")
+        }
+        check(Set(seen.values).count == 3, "each language has its own settings text")
+        check(AppLanguage.allCases.map(\.rawValue) == ["system", "zh-Hant", "en", "ja"], "language menu order and stored identifiers")
+        L10n.overrideForTesting(nil)
         print("PASS: \(checks) state combinations and unavailable-data checks")
     }
 }

@@ -1,0 +1,240 @@
+import Foundation
+import Synchronization
+
+/// Languages MyDuoBar ships. `system` follows the macOS language list.
+enum AppLanguage: String, CaseIterable, Sendable {
+    case system
+    case zhHant = "zh-Hant"
+    case en
+    case ja
+
+    /// Menu title, shown in each language's own name so it stays readable after a wrong pick.
+    var menuTitle: String {
+        switch self {
+        case .system: return L10n.systemDefault
+        case .zhHant: return "繁體中文"
+        case .en: return "English"
+        case .ja: return "日本語"
+        }
+    }
+}
+
+/// All user-facing text. Every phrase takes Traditional Chinese, English and Japanese together,
+/// so the compiler rejects a string that is missing a translation.
+/// Nonisolated and lock-protected: status readers build strings on a background queue.
+enum L10n {
+    static let preferenceKey = "appLanguage"
+    private static let testOverride = Mutex<AppLanguage?>(nil)
+    private static let testSuite = Mutex<String?>(nil)
+
+    /// Tests pin a language without touching the user's defaults.
+    static func overrideForTesting(_ language: AppLanguage?) { testOverride.withLock { $0 = language } }
+    /// Tests keep the stored preference in a throwaway suite instead of the process's standard defaults.
+    static func useDefaultsSuiteForTesting(_ suite: String?) { testSuite.withLock { $0 = suite } }
+    private static var defaults: UserDefaults {
+        guard let suite = testSuite.withLock({ $0 }), let suiteDefaults = UserDefaults(suiteName: suite) else { return .standard }
+        return suiteDefaults
+    }
+
+    static var preference: AppLanguage {
+        AppLanguage(rawValue: defaults.string(forKey: preferenceKey) ?? "") ?? .system
+    }
+
+    /// The concrete language in use; never `.system`.
+    static var current: AppLanguage {
+        if let pinned = testOverride.withLock({ $0 }), pinned != .system { return pinned }
+        let chosen = preference
+        if chosen != .system { return chosen }
+        // Read the global list: this app's own AppleLanguages override would otherwise shadow it.
+        let global = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String]
+        for identifier in global ?? Locale.preferredLanguages {
+            if identifier.hasPrefix("ja") { return .ja }
+            if identifier.hasPrefix("zh") { return .zhHant }
+            if identifier.hasPrefix("en") { return .en }
+        }
+        return .en
+    }
+
+    /// Stores the choice. A fixed language also sets this app's AppleLanguages so the system-drawn
+    /// permission prompts (InfoPlist.strings) match after the next launch.
+    static func setPreference(_ language: AppLanguage) {
+        let defaults = self.defaults
+        if language == .system {
+            defaults.removeObject(forKey: preferenceKey)
+            defaults.removeObject(forKey: "AppleLanguages")
+        } else {
+            defaults.set(language.rawValue, forKey: preferenceKey)
+            defaults.set([language.rawValue], forKey: "AppleLanguages")
+        }
+    }
+
+    private static func pick(_ zhHant: String, _ en: String, _ ja: String) -> String {
+        switch current {
+        case .ja: return ja
+        case .en: return en
+        case .zhHant, .system: return zhHant
+        }
+    }
+
+    // MARK: Language
+    static var systemDefault: String { pick("跟隨系統", "System Default", "システムに従う") }
+    static var language: String { pick("語言", "Language", "言語") }
+    static var languageNote: String {
+        pick("系統權限提示的語言會在重新開啟 App 後套用。",
+             "System permission prompts switch language after you relaunch the app.",
+             "システムの許可ダイアログの言語は、アプリを再起動すると反映されます。")
+    }
+
+    // MARK: Lists
+    static var listSeparator: String { pick("、", ", ", "、") }
+    static var summarySeparator: String { pick("，", ", ", "、") }
+
+    // MARK: Focus
+    static var off: String { pick("未開啟", "Off", "オフ") }
+    static var on: String { pick("已開啟", "On", "オン") }
+    static var notShared: String { pick("狀態未共享", "Not Shared", "共有されていません") }
+    static var focusNotSharedYet: String { pick("系統尚未共享專注狀態", "macOS hasn't shared Focus status yet.", "システムが集中モードの状態をまだ共有していません。") }
+    static var focusNeedsReading: String { pick("需要讀取系統專注狀態", "Focus status hasn't been read yet.", "集中モードの状態をまだ読み取っていません。") }
+    static var focusAllowInSettings: String {
+        pick("在 MyDuoBar 設定中允許讀取專注狀態。僅讀取是否專注，不區分具體模式。",
+             "Allow Focus access in MyDuoBar Settings. Only whether Focus is on is read, not which mode.",
+             "MyDuoBar の設定で集中モードの読み取りを許可してください。オンかどうかだけを読み取り、モードの種類は区別しません。")
+    }
+
+    // MARK: Battery
+    static var reading: String { pick("讀取中", "Reading…", "読み込み中") }
+    static var externalPower: String { pick("外接電源", "External Power", "外部電源") }
+    static var noInternalBattery: String { pick("此 Mac 沒有內建電池", "This Mac has no built-in battery", "この Mac には内蔵バッテリーがありません") }
+    static var charging: String { pick("正在充電", "Charging", "充電中") }
+    static var fullyCharged: String { pick("電量已充滿", "Fully Charged", "充電完了") }
+    static var pluggedInNotCharging: String { pick("已接上電源 · 未充電", "Plugged In · Not Charging", "電源接続中 · 充電停止中") }
+    static var onBattery: String { pick("電池供電", "On Battery", "バッテリー駆動") }
+    static func onBattery(hours: Int, minutes: Int) -> String {
+        pick("電池供電 · 約 \(hours) 小時 \(minutes) 分鐘",
+             "On Battery · About \(hours) hr \(minutes) min",
+             "バッテリー駆動 · 残り約 \(hours) 時間 \(minutes) 分")
+    }
+    static var battery: String { pick("電池", "Battery", "バッテリー") }
+    static func batteryLevel(_ value: String) -> String { pick("電量 \(value)", "Battery \(value)", "バッテリー \(value)") }
+
+    // MARK: Network
+    static var wifiConnected: String { pick("已連線 Wi-Fi", "Connected to Wi-Fi", "Wi-Fi に接続済み") }
+    static var ethernet: String { pick("乙太網路", "Ethernet", "Ethernet") }
+    static var ethernetConnected: String { pick("乙太網路已連線", "Ethernet Connected", "Ethernet 接続済み") }
+    static var noWiFiInterface: String { pick("無 Wi-Fi 介面", "No Wi-Fi Interface", "Wi-Fi インターフェイスなし") }
+    static var wifiNotConnected: String { pick("Wi-Fi 未連線", "Wi-Fi Not Connected", "Wi-Fi 未接続") }
+    static var wifiOff: String { pick("Wi-Fi 已關閉", "Wi-Fi Off", "Wi-Fi オフ") }
+    static var networkNameHidden: String { pick("網路名稱受系統保護 · ", "Network name hidden by macOS · ", "ネットワーク名は macOS により非表示 · ") }
+    static var usingWiredNetwork: String { pick("正在使用有線網路", "Using a wired network", "有線ネットワークを使用中") }
+    static var noNetworkPath: String { pick("沒有可用網路路徑", "No network path available", "利用可能なネットワーク経路がありません") }
+    static var openWiFiSettingsHint: String { pick("開啟 Wi-Fi 設定以管理連線", "Open Wi-Fi Settings to manage connections", "Wi-Fi 設定を開いて接続を管理") }
+    static var notConnected: String { pick("未連線", "Not Connected", "未接続") }
+    static var turnedOff: String { pick("已關閉", "Off", "オフ") }
+    static var connected: String { pick("已連線", "Connected", "接続済み") }
+    static var signalStrong: String { pick("訊號很好", "Strong Signal", "電波良好") }
+    static var signalFair: String { pick("訊號一般", "Fair Signal", "電波普通") }
+    static var signalWeak: String { pick("訊號較弱", "Weak Signal", "電波が弱い") }
+
+    // MARK: VPN
+    static var systemProxyOn: String { pick("系統代理已開啟", "System Proxy On", "システムプロキシ オン") }
+    static var unavailable: String { pick("狀態不可用", "Unavailable", "取得できません") }
+    static var unidentifiedTunnel: String { pick("偵測到未識別的通道", "Unidentified Tunnel Detected", "不明なトンネルを検出") }
+    static var unidentifiedTunnelHelp: String {
+        pick("偵測到網路通道，但 macOS 未提供可確認的 VPN 名稱，因此不會點亮 VPN 圖示。",
+             "A network tunnel was detected, but macOS provided no confirmable VPN name, so the VPN dot stays off.",
+             "ネットワークトンネルを検出しましたが、macOS が確認できる VPN 名を提供していないため、VPN のドットは点灯しません。")
+    }
+    static var personalVPN: String { pick("個人 VPN", "Personal VPN", "個人用 VPN") }
+
+    // MARK: Audio
+    static var soundOutputUnavailable: String { pick("聲音輸出不可用", "Sound Output Unavailable", "サウンド出力を利用できません") }
+    static var currentOutputDevice: String { pick("目前的輸出裝置", "Current Output Device", "現在の出力装置") }
+    static var muted: String { pick("已靜音", "Muted", "消音中") }
+    static var notMuted: String { pick("未靜音", "Not Muted", "消音オフ") }
+    static var noVolumeInfo: String { pick("裝置不提供音量狀態", "Device doesn't report volume", "デバイスが音量を報告しません") }
+    static var sound: String { pick("聲音", "Sound", "サウンド") }
+
+    // MARK: Dots
+    static var headphones: String { pick("耳機", "Headphones", "ヘッドフォン") }
+    static var mute: String { pick("靜音", "Mute", "消音") }
+    static var focus: String { pick("專注", "Focus", "集中モード") }
+    static var vpnConnected: String { pick("VPN 已連線", "VPN Connected", "VPN 接続済み") }
+    static var headphonesConnected: String { pick("耳機已連線", "Headphones Connected", "ヘッドフォン接続済み") }
+    static var focusOn: String { pick("專注已開啟", "Focus On", "集中モード オン") }
+
+    // MARK: Panel
+    static var thisMac: String { pick("此 Mac", "This Mac", "この Mac") }
+    static var sampleStatus: String { pick("範例狀態", "Sample", "サンプル") }
+    static func open(_ page: String) -> String { pick("開啟\(page)", "Open \(page)", "\(page)を開く") }
+
+    // MARK: System Settings pages
+    static var wifiSettings: String { pick("Wi-Fi 設定", "Wi-Fi Settings", "Wi-Fi 設定") }
+    static var networkSettings: String { pick("網路設定", "Network Settings", "ネットワーク設定") }
+    static var batterySettings: String { pick("電池設定", "Battery Settings", "バッテリー設定") }
+    static var vpnSettings: String { pick("VPN 設定", "VPN Settings", "VPN 設定") }
+    static var bluetoothSettings: String { pick("藍牙設定", "Bluetooth Settings", "Bluetooth 設定") }
+    static var soundSettings: String { pick("聲音設定", "Sound Settings", "サウンド設定") }
+    static var focusSettings: String { pick("專注模式設定", "Focus Settings", "集中モード設定") }
+    static var menuBarSettings: String { pick("選單列設定", "Menu Bar Settings", "メニューバー設定") }
+
+    // MARK: Menu
+    static var hideSystemIcons: String { pick("關閉對應選單列圖示", "Hide Matching Menu Bar Icons…", "対応するメニューバー項目を非表示…") }
+    static var settingsMenu: String { pick("設定…", "Settings…", "設定…") }
+    static var quit: String { pick("結束 MyDuoBar", "Quit MyDuoBar", "MyDuoBar を終了") }
+
+    // MARK: Settings window
+    static var settingsTitle: String { pick("MyDuoBar 設定", "MyDuoBar Settings", "MyDuoBar 設定") }
+    static var tagline: String { pick("一個位置，讀懂 Mac 的狀態。", "Your Mac's status, in one place.", "Mac の状態をひと目で。") }
+    static var launchAtLogin: String { pick("登入時自動啟動", "Launch at Login", "ログイン時に起動") }
+    static var menuBarOnlyNote: String {
+        pick("只在選單列顯示。按一下即可查看，按一下其他地方或按 Esc 收起。",
+             "Lives only in the menu bar. Click to view; click elsewhere or press Esc to close.",
+             "メニューバーにのみ表示されます。クリックで表示し、ほかの場所をクリックするか Esc キーで閉じます。")
+    }
+    static var positionNote: String {
+        pick("位置：按住 ⌘ 拖到控制中心左側。macOS 會記住你調整的位置。",
+             "Position: hold ⌘ and drag it to the left of Control Center. macOS remembers where you put it.",
+             "位置：⌘ キーを押しながらコントロールセンターの左側へドラッグします。macOS がその位置を記憶します。")
+    }
+    static var bottomDots: String { pick("底部圓點", "Bottom Dots", "下部のドット") }
+    static var bottomDotsNote: String {
+        pick("從左到右排列。圓點大小一致，開啟時點亮，未開啟時變灰。取消勾選可隱藏這一項。",
+             "Ordered left to right. All dots are the same size: lit when on, dimmed when off. Uncheck an item to hide it.",
+             "左から右の順に並びます。ドットはすべて同じ大きさで、オンのときは点灯し、オフのときはグレーになります。チェックを外すと非表示になります。")
+    }
+    static var tidyMenuBar: String { pick("整理系統選單列", "Tidy the Menu Bar", "メニューバーを整理") }
+    static var tidyMenuBarNote: String {
+        pick("在系統設定中關閉原生 Wi-Fi、電池的選單列顯示，即可留出空間。",
+             "Turn off the built-in Wi-Fi and Battery menu bar items in System Settings to free up space.",
+             "システム設定で標準の Wi-Fi とバッテリーのメニューバー表示をオフにすると、スペースを確保できます。")
+    }
+    static var statusAccess: String { pick("狀態讀取", "Status Access", "状態の読み取り") }
+    static var allowFocus: String { pick("允許讀取專注狀態…", "Allow Focus Access…", "集中モードの読み取りを許可…") }
+    static var allowWiFiName: String { pick("允許顯示 Wi-Fi 名稱…", "Allow Wi-Fi Name…", "Wi-Fi 名の表示を許可…") }
+    static var statusAccessNote: String {
+        pick("顯示 Wi-Fi 名稱需要定位服務權限，App 不會取得地理座標。專注狀態未共享時，圓點保持灰色，詳細資訊會標示「狀態未共享」。",
+             "Showing the Wi-Fi name requires Location Services permission; the app never reads your coordinates. When Focus status isn't shared, its dot stays gray and details show “Not Shared”.",
+             "Wi-Fi 名の表示には位置情報サービスの許可が必要ですが、座標は取得しません。集中モードの状態が共有されていない場合、ドットはグレーのままで、詳細に「共有されていません」と表示されます。")
+    }
+    static func versionFooter(_ version: String) -> String { pick("\(version) · 本機執行", "\(version) · Runs locally", "\(version) · ローカルで動作") }
+    static func showDot(_ title: String) -> String { pick("顯示\(title)圓點", "Show \(title) dot", "\(title)のドットを表示") }
+    static func moveEarlier(_ title: String) -> String { pick("\(title)向前移", "Move \(title) earlier", "\(title)を前へ移動") }
+    static func moveLater(_ title: String) -> String { pick("\(title)向後移", "Move \(title) later", "\(title)を後ろへ移動") }
+    static var moveLeft: String { pick("向左移動", "Move Left", "左へ移動") }
+    static var moveRight: String { pick("向右移動", "Move Right", "右へ移動") }
+    static var focusPrompt: String {
+        pick("按一下下方按鈕，並在系統對話框中允許讀取。另外還需在系統設定中開啟「共享專注狀態」。",
+             "Click the button below and allow access in the system dialog. Also turn on “Share Focus Status” in System Settings.",
+             "下のボタンをクリックし、システムのダイアログで許可してください。さらにシステム設定で「集中モードの状態を共有」をオンにしてください。")
+    }
+    static var focusReadable: String { pick("專注狀態可讀 · ", "Focus status available · ", "集中モードの状態を取得可能 · ") }
+    static var loginItemFailed: String { pick("自動啟動尚未完成", "Couldn't Set Launch at Login", "ログイン時の起動を設定できませんでした") }
+    static var focusNotSharedTitle: String { pick("專注狀態尚未共享", "Focus Status Not Shared", "集中モードの状態が共有されていません") }
+    static var focusNotSharedBody: String {
+        pick("請在系統設定中允許 MyDuoBar 讀取專注狀態，並在專注模式 → 專注狀態中開啟共享。MyDuoBar 只讀取是否專注，開啟時點亮圓點。",
+             "Allow MyDuoBar to read Focus status in System Settings, and turn on sharing under Focus → Focus Status. MyDuoBar only reads whether Focus is on and lights the dot when it is.",
+             "システム設定で MyDuoBar による集中モードの読み取りを許可し、「集中モード → 集中モードの状態」で共有をオンにしてください。MyDuoBar は集中モードがオンかどうかだけを読み取り、オンのときにドットを点灯します。")
+    }
+    static var openFocusSettings: String { pick("開啟專注設定", "Open Focus Settings", "集中モード設定を開く") }
+    static var later: String { pick("稍後", "Later", "後で") }
+}

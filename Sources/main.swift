@@ -11,6 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let preferences = DotPreferences()
     private let canvas = StatusIconView()
     private var settings: SettingsController?
+    private let systemIconsItem = NSMenuItem(title: "", action: #selector(openSystemIcons), keyEquivalent: "")
+    private let settingsItem = NSMenuItem(title: "", action: #selector(showSettings), keyEquivalent: ",")
+    private let quitItem = NSMenuItem(title: "", action: #selector(quitApp), keyEquivalent: "q")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -33,12 +36,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         let content = NSMenuItem(); content.view = panel; menu.addItem(content)
         menu.addItem(.separator())
-        let systemIcons = NSMenuItem(title: "關閉對應選單列圖示", action: #selector(openSystemIcons), keyEquivalent: "")
-        systemIcons.target = self; menu.addItem(systemIcons)
-        let settingsItem = NSMenuItem(title: "設定…", action: #selector(showSettings), keyEquivalent: ",")
-        settingsItem.target = self; menu.addItem(settingsItem)
-        let quit = NSMenuItem(title: "結束 MyDuoBar", action: #selector(quitApp), keyEquivalent: "q")
-        quit.target = self; menu.addItem(quit)
+        for menuItem in [systemIconsItem, settingsItem, quitItem] {
+            menuItem.target = self; menu.addItem(menuItem)
+        }
+        applyMenuTitles()
         item.menu = menu
         monitor.onChange = { [weak self] state in
             self?.update(state)
@@ -69,6 +70,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showSettings(); return false
     }
+    private func applyMenuTitles() {
+        systemIconsItem.title = L10n.hideSystemIcons
+        settingsItem.title = L10n.settingsMenu
+        quitItem.title = L10n.quit
+    }
+
+    /// Re-render everything that holds text; the refresh rebuilds status strings in the new language.
+    private func languageDidChange() {
+        applyMenuTitles()
+        panel.update(monitor.status)
+        item.button?.setAccessibilityLabel(monitor.status.accessibilitySummary)
+        settings?.update(monitor.status)
+        monitor.refresh()
+    }
+
     private func update(_ state: SystemStatus) {
         renderIcon()
         item.button?.setAccessibilityLabel(state.accessibilitySummary)
@@ -91,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if settings == nil {
             let controller = SettingsController(preferences: preferences)
             controller.onRefresh = { [weak self] in self?.monitor.refresh() }
+            controller.onLanguageChange = { [weak self] in self?.languageDidChange() }
             settings = controller
         }
         settings?.present(status: monitor.status)
