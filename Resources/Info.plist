@@ -2,10 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleExecutable</key><string>DuoBar</string>
-    <key>CFBundleIdentifier</key><string>com.corale.duobar</string>
-    <key>CFBundleName</key><string>DuoBar</string>
-    <key>CFBundleDisplayName</key><string>DuoBar</string>
+    <key>CFBundleExecutable</key><string>MyDuoBar</string>
+    <key>CFBundleIdentifier</key><string>com.rex.myduobar</string>
+    <key>CFBundleName</key><string>MyDuoBar</string>
+    <key>CFBundleDisplayName</key><string>MyDuoBar</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0.0</string>
@@ -15,7 +15,7 @@
     <key>NSHighResolutionCapable</key><true/>
     <key>NSFocusStatusUsageDescription</key><string>读取是否开启专注模式，开启时点亮菜单栏中的专注圆点。不读取具体专注模式或个人内容。</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
-    <key>NSLocationUsageDescription</key><string>仅用于读取已连接的 Wi-Fi 名称。DuoBar 不请求地理坐标、不保存或上传位置。</string>
+    <key>NSLocationUsageDescription</key><string>仅用于读取已连接的 Wi-Fi 名称。MyDuoBar 不请求地理坐标、不保存或上传位置。</string>
     <key>NSLocationWhenInUseUsageDescription</key><string>仅用于读取已连接的 Wi-Fi 名称。不请求地理坐标。</string>
 </dict>
 </plist>

@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         item = NSStatusBar.system.statusItem(withLength: 36)
-        item.autosaveName = "DuoBar"
+        item.autosaveName = "MyDuoBar"
         item.isVisible = true
         if let button = item.button {
             // Reserve the full drawing height; AppKit sizes the status item to this image.
@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         systemIcons.target = self; menu.addItem(systemIcons)
         let settingsItem = NSMenuItem(title: "设置…", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self; menu.addItem(settingsItem)
-        let quit = NSMenuItem(title: "退出 DuoBar", action: #selector(quitApp), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "退出 MyDuoBar", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self; menu.addItem(quit)
         item.menu = menu
         monitor.onChange = { [weak self] state in

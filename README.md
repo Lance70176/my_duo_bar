@@ -1,6 +1,14 @@
-<p align="center"><img src="docs/icon.png" width="96" alt="DuoBar 图标"></p>
+<p align="center"><img src="docs/icon.png" width="96" alt="MyDuoBar 图标"></p>
 
-# DuoBar
+# MyDuoBar
+
+> 本專案是 [n977485865-create/DuoBar](https://github.com/n977485865-create/DuoBar)（commit `b278174`）的個人本地版本。
+>
+> 本地修改（2026-09-15）：
+> - App 名稱改為 **MyDuoBar**，Bundle ID 改為 `com.rex.myduobar`，避免與原版的偏好設定、權限紀錄衝突。
+> - 修正 Swift 6.2 / macOS 27 SDK 下的兩個編譯錯誤（`StatusIconView` 閉包型別推導逾時、`IconTests` 的 `cos` 型別歧義）。
+>
+> 資安檢查結論：全部原始碼、建置腳本、CI 與資源檔已逐一審查。程式不發任何網路請求、不執行外部程式、不寫檔（僅用 UserDefaults 存圓點設定），無第三方相依，二進位只連結系統框架。唯一對外動作是設定頁「联系开发者」按鈕點擊後用瀏覽器開小紅書網址，以及把微信/信箱字串複製到剪貼簿。
 
 把电池、Wi-Fi 和四项状态放进一个圆形菜单栏图标。原生 AppKit、本地运行，没有 Dock 图标、账号或额外依赖。
 
@@ -8,7 +16,7 @@
 
 ## 安装
 
-下载 Release 中的 `DuoBar-1.0.0-universal.dmg`，打开后把 **DuoBar.app 拖进 Applications**，再从“应用程序”中启动。也可以下载 ZIP，解压后把应用移到“应用程序”。
+下载 Release 中的 `MyDuoBar-1.0.0-universal.dmg`，打开后把 **MyDuoBar.app 拖进 Applications**，再从“应用程序”中启动。也可以下载 ZIP，解压后把应用移到“应用程序”。
 
 安装包包含 Apple Silicon 和 Intel 两种架构，要求 macOS 13 或更新版本。Apple Silicon 已实机验证，Intel 已完成编译与架构检查，尚未在 Intel 真机验收。
 
@@ -18,11 +26,11 @@
 
 第一次启动会显示设置。图标和动画已经包含在应用中，但系统权限和菜单栏位置需要在每台 Mac 上分别设置。
 
-1. **位置**：按住 ⌘ 拖动 DuoBar 到控制中心左侧。macOS 会记住你的位置；应用不强行重排其他图标。公开 API 没有按另一个应用的图标进行相对定位的选项，因此不能保证首次安装自动出现在所有 Mac 的同一位置。
+1. **位置**：按住 ⌘ 拖动 MyDuoBar 到控制中心左侧。macOS 会记住你的位置；应用不强行重排其他图标。公开 API 没有按另一个应用的图标进行相对定位的选项，因此不能保证首次安装自动出现在所有 Mac 的同一位置。
 2. **原生图标**：点击“关闭对应状态栏”，在系统设置中选择是否隐藏原生 Wi-Fi、电池等图标。
 3. **登录启动**：需要时勾选“登录时自动启动”。
 4. **Wi-Fi 名称**：需要时允许定位权限。没有权限仍显示连接与信号，应用不请求地理坐标。
-5. **专注状态**：在 DuoBar 设置里点击“允许读取专注状态”，在 macOS 弹窗中点“允许”，并在系统设置 → 专注模式 → 专注状态中开启共享。仅打开某个专注模式，并不等于系统允许应用读取它。没有可读状态时圆点置灰，菜单标注“状态未共享”。
+5. **专注状态**：在 MyDuoBar 设置里点击“允许读取专注状态”，在 macOS 弹窗中点“允许”，并在系统设置 → 专注模式 → 专注状态中开启共享。仅打开某个专注模式，并不等于系统允许应用读取它。没有可读状态时圆点置灰，菜单标注“状态未共享”。
 
 单击菜单栏图标查看详情，按 Esc 或点击外部收起。没有悬停展开。
 
@@ -66,9 +74,9 @@
 ./scripts/package.sh --skip-build
 ```
 
-- 应用：`build/DuoBar.app`
-- 安装磁盘：`dist/DuoBar-1.0.0-universal.dmg`
-- 压缩包：`dist/DuoBar-1.0.0-universal.zip`
+- 应用：`build/MyDuoBar.app`
+- 安装磁盘：`dist/MyDuoBar-1.0.0-universal.dmg`
+- 压缩包：`dist/MyDuoBar-1.0.0-universal.zip`
 
 每次构建从空应用目录开始。打包前检查应用只包含主程序、Info.plist、图标和签名，并核验两种架构、签名及系统库依赖。ZIP 不携带 AppleDouble 附加文件；测试、诊断脚本和本机偏好不会进入安装包。
 
@@ -84,8 +92,8 @@
 
 ## macOS 菜单栏开关已开但图标不显示
 
-本机在 macOS 26.6.2 出现过 DuoBar 开关开启、图标仍被控制中心阻止的情况。实际验证发现关闭 ChatGPT 的菜单栏开关会隐藏 DuoBar，重新开启后恢复。DuoBar 的程序和安装包不依赖 ChatGPT；本机的系统关联记录也不包含在安装包中。
+本机在 macOS 26.6.2 出现过 MyDuoBar 开关开启、图标仍被控制中心阻止的情况。实际验证发现关闭 ChatGPT 的菜单栏开关会隐藏 MyDuoBar，重新开启后恢复。MyDuoBar 的程序和安装包不依赖 ChatGPT；本机的系统关联记录也不包含在安装包中。
 
-2026-09-15 已在本机修复并验收：备份系统菜单栏配置后，仅移除了 ChatGPT 条目对 DuoBar 的错误引用，刷新菜单栏并从 Finder 启动。随后关闭 ChatGPT 的菜单栏开关，系统窗口合成器确认 DuoBar 的菜单栏窗口仍在屏幕内，用户也确认图标正常显示且能打开状态面板。本机修复工具不包含在应用和安装包中。
+2026-09-15 已在本机修复并验收：备份系统菜单栏配置后，仅移除了 ChatGPT 条目对 MyDuoBar 的错误引用，刷新菜单栏并从 Finder 启动。随后关闭 ChatGPT 的菜单栏开关，系统窗口合成器确认 MyDuoBar 的菜单栏窗口仍在屏幕内，用户也确认图标正常显示且能打开状态面板。本机修复工具不包含在应用和安装包中。
 
 macOS 26 的其他菜单栏应用也报告过由终端或 AI 工具启动后被错误归到启动方的菜单栏开关下，见 [CodexBar 的复现与处理记录](https://github.com/steipete/CodexBar/issues/1945)。开发测试和正常使用应从 Finder 的“应用程序”文件夹启动。重新打包不会清除已经产生的系统关联记录；本次修复与新安装环境的兼容性验收需分别判断。

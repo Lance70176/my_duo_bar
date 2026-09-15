@@ -9,7 +9,7 @@ import SystemConfiguration
 final class SystemMonitor: NSObject, CWEventDelegate {
     var onChange: ((SystemStatus) -> Void)?
     private(set) var status = SystemStatus()
-    private let worker = DispatchQueue(label: "com.corale.duobar.status", qos: .utility)
+    private let worker = DispatchQueue(label: "com.rex.myduobar.status", qos: .utility)
     private let wifi = CWWiFiClient.shared()
     private let path = NWPathMonitor()
     private var route: NetworkLink = .unknown
@@ -49,7 +49,7 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         if let powerSource { CFRunLoopAddSource(CFRunLoopGetMain(), powerSource, .commonModes) }
         var context = SCDynamicStoreContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
                                             retain: nil, release: nil, copyDescription: nil)
-        dynamicStore = SCDynamicStoreCreate(nil, "DuoBar" as CFString, { _, _, context in
+        dynamicStore = SCDynamicStoreCreate(nil, "MyDuoBar" as CFString, { _, _, context in
             guard let context else { return }
             Unmanaged<SystemMonitor>.fromOpaque(context).takeUnretainedValue().refresh()
         }, &context)

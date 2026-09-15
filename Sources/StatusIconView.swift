@@ -63,7 +63,12 @@ final class StatusIconView: NSView {
     }
 
     private func render(_ value: SystemStatus, animated: Bool) {
-        effectiveAppearance.performAsCurrentDrawingAppearance {
+        // Keep the closure trivial: newer Swift toolchains time out type-checking a large inline body.
+        effectiveAppearance.performAsCurrentDrawingAppearance { self.renderContents(value, animated: animated) }
+    }
+
+    private func renderContents(_ value: SystemStatus, animated: Bool) {
+        do {
             let color = NSColor.labelColor.usingColorSpace(.deviceRGB) ?? .black
             let green = NSColor(calibratedRed: 0.18, green: 0.80, blue: 0.38, alpha: 1)
             let ring = value.battery.lowPowerMode ? NSColor.systemYellow : (value.battery.connectedToPower ? green : color)

@@ -162,7 +162,7 @@ struct SystemStatus: Equatable {
         return items
     }
     var accessibilitySummary: String {
-        (["DuoBar", "电量 \(battery.title)", wifi.title] + glyphs.map(\.label)).joined(separator: "，")
+        (["MyDuoBar", "电量 \(battery.title)", wifi.title] + glyphs.map(\.label)).joined(separator: "，")
     }
     static func preview() -> SystemStatus {
         var s = SystemStatus()

@@ -42,7 +42,7 @@ enum SystemReaders {
     }
 
     static func vpn() -> VPNState {
-        guard let prefs = SCPreferencesCreate(nil, "DuoBar" as CFString, nil),
+        guard let prefs = SCPreferencesCreate(nil, "MyDuoBar" as CFString, nil),
               let services = SCNetworkServiceCopyAll(prefs) as? [SCNetworkService] else {
             return VPNState(available: false)
         }
@@ -60,7 +60,7 @@ enum SystemReaders {
             }
         }
         // A utun alone is NOT proof of a VPN. Apple uses tunnels for other services.
-        if !state.active, let store = SCDynamicStoreCreate(nil, "DuoBar" as CFString, nil, nil),
+        if !state.active, let store = SCDynamicStoreCreate(nil, "MyDuoBar" as CFString, nil, nil),
            let keys = SCDynamicStoreCopyKeyList(store, "State:/Network/Service/.*/IPv4" as CFString) as? [String] {
             for key in keys {
                 guard let d = SCDynamicStoreCopyValue(store, key as CFString) as? [String: Any],
@@ -86,7 +86,7 @@ enum SystemReaders {
     static func focus() -> FocusState {
         let center = INFocusStatusCenter.default
         guard center.authorizationStatus == .authorized else {
-            return .unavailable("在 DuoBar 设置中允许读取专注状态。仅读取是否专注，不区分具体模式。")
+            return .unavailable("在 MyDuoBar 设置中允许读取专注状态。仅读取是否专注，不区分具体模式。")
         }
         return .shared(center.focusStatus.isFocused)
     }

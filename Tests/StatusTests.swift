@@ -38,7 +38,7 @@ struct StatusTests {
         check(layout.visible == [.headphones, .mute, .focus], "hidden VPN leaves other positions ordered")
         layout.hidden = Set(StatusGlyph.allCases)
         check(layout.visible.isEmpty, "all dots can be hidden")
-        let suite = "com.corale.duobar.tests." + UUID().uuidString
+        let suite = "com.rex.myduobar.tests." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = DotPreferences(defaults: defaults)

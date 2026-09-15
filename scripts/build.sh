@@ -5,8 +5,14 @@ DUOBAR_BUILD="$DUOBAR_ROOT/build"
 mkdir -p "$DUOBAR_BUILD"
 DUOBAR_STAGE=$(mktemp -d "$DUOBAR_BUILD/app-stage.XXXXXX")
 trap 'rm -rf "$DUOBAR_STAGE"' EXIT
-DUOBAR_APP="$DUOBAR_STAGE/DuoBar.app"
-DUOBAR_SDK="$(xcrun --show-sdk-path)"
+DUOBAR_APP="$DUOBAR_STAGE/MyDuoBar.app"
+# Use the SDK shipped with the same developer directory as the compiler. On machines where
+# Command Line Tools carry a newer beta SDK, `xcrun --show-sdk-path` can pick an SDK the
+# selected Xcode compiler cannot read. Override with DUOBAR_SDK=/path/to/MacOSX.sdk.
+DUOBAR_XCODE_SDK="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+if [[ -z "${DUOBAR_SDK:-}" ]]; then
+    if [[ -d "$DUOBAR_XCODE_SDK" ]]; then DUOBAR_SDK="$DUOBAR_XCODE_SDK"; else DUOBAR_SDK="$(xcrun --show-sdk-path)"; fi
+fi
 mkdir -p "$DUOBAR_APP/Contents/MacOS" "$DUOBAR_APP/Contents/Resources" "$DUOBAR_BUILD/module-cache" "$DUOBAR_BUILD/bin"
 for DUOBAR_ARCH in arm64 x86_64; do
     xcrun swiftc -O -whole-module-optimization -swift-version 5 \
@@ -14,15 +20,15 @@ for DUOBAR_ARCH in arm64 x86_64; do
         -module-cache-path "$DUOBAR_BUILD/module-cache" \
         -framework AppKit -framework CoreWLAN -framework CoreAudio -framework IOKit \
         -framework Intents -framework Network -framework SystemConfiguration -framework ServiceManagement -framework CoreLocation \
-        "$DUOBAR_ROOT"/Sources/*.swift -o "$DUOBAR_BUILD/bin/DuoBar-$DUOBAR_ARCH"
+        "$DUOBAR_ROOT"/Sources/*.swift -o "$DUOBAR_BUILD/bin/MyDuoBar-$DUOBAR_ARCH"
 done
-xcrun lipo -create "$DUOBAR_BUILD/bin/DuoBar-arm64" "$DUOBAR_BUILD/bin/DuoBar-x86_64" -output "$DUOBAR_APP/Contents/MacOS/DuoBar"
+xcrun lipo -create "$DUOBAR_BUILD/bin/MyDuoBar-arm64" "$DUOBAR_BUILD/bin/MyDuoBar-x86_64" -output "$DUOBAR_APP/Contents/MacOS/MyDuoBar"
 cp -X "$DUOBAR_ROOT/Resources/Info.plist" "$DUOBAR_APP/Contents/Info.plist"
 cp -X "$DUOBAR_ROOT/Resources/AppIcon.icns" "$DUOBAR_APP/Contents/Resources/AppIcon.icns"
 /usr/bin/plutil -lint "$DUOBAR_APP/Contents/Info.plist"
 /usr/bin/codesign --force --sign - "$DUOBAR_APP"
 "$DUOBAR_ROOT/scripts/verify-app.sh" "$DUOBAR_APP"
 # Replace only the generated app, after the fresh bundle has passed validation.
-rm -rf "$DUOBAR_BUILD/DuoBar.app"
-mv "$DUOBAR_APP" "$DUOBAR_BUILD/DuoBar.app"
-printf 'Built: %s\n' "$DUOBAR_BUILD/DuoBar.app"
+rm -rf "$DUOBAR_BUILD/MyDuoBar.app"
+mv "$DUOBAR_APP" "$DUOBAR_BUILD/MyDuoBar.app"
+printf 'Built: %s\n' "$DUOBAR_BUILD/MyDuoBar.app"

@@ -112,7 +112,7 @@ final class StatusPanel: NSView {
     private let headphones = StatusRow(height: 35, destination: .bluetooth, compact: true)
     private let sound = StatusRow(height: 35, destination: .sound, compact: true)
     private let focus = StatusRow(height: 35, destination: .focus, compact: true)
-    private let title = NSTextField(labelWithString: "DuoBar")
+    private let title = NSTextField(labelWithString: "MyDuoBar")
     private let mode = NSTextField(labelWithString: "此 Mac")
     override var allowsVibrancy: Bool { true }
 

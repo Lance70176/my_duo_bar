@@ -18,7 +18,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         self.preferences = preferences
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 496, height: 780),
                               styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "DuoBar 设置"
+        window.title = "MyDuoBar 设置"
         window.isReleasedWhenClosed = false
         super.init(window: window)
         location.delegate = self
@@ -40,7 +40,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.widthAnchor.constraint(equalToConstant: 60).isActive = true
         icon.heightAnchor.constraint(equalToConstant: 48).isActive = true
-        let name = NSTextField(labelWithString: "DuoBar")
+        let name = NSTextField(labelWithString: "MyDuoBar")
         name.font = .systemFont(ofSize: 21, weight: .semibold)
         let caption = NSTextField(labelWithString: "一个位置，读懂 Mac 的状态。")
         caption.font = .systemFont(ofSize: 12); caption.textColor = .secondaryLabelColor
@@ -212,7 +212,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         if center.authorizationStatus == .denied || center.authorizationStatus == .restricted {
             let alert = NSAlert()
             alert.messageText = "专注状态尚未共享"
-            alert.informativeText = "请在系统设置中允许 DuoBar 读取专注状态，并在专注模式 → 专注状态中开启共享。DuoBar 只读取是否专注，开启时点亮圆点。"
+            alert.informativeText = "请在系统设置中允许 MyDuoBar 读取专注状态，并在专注模式 → 专注状态中开启共享。MyDuoBar 只读取是否专注，开启时点亮圆点。"
             alert.addButton(withTitle: "打开专注设置")
             alert.addButton(withTitle: "稍后")
             if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open(.focus) }

@@ -32,7 +32,7 @@ struct IconTests {
         inactive.vpn.names = []; inactive.audio.headphoneNames = []; inactive.audio.muted = false; inactive.focus = .off
         let gray = bitmap(inactive)
         // A point 0.95 pt from the first dot's center must remain inside either state.
-        let angle = 240.0 * Double.pi/180
+        let angle = CGFloat(240.0 * Double.pi / 180)
         let x = DuoIcon.center.x+DuoIcon.radius*cos(angle)+0.95, y = DuoIcon.center.y+DuoIcon.radius*sin(angle)
         check(alpha(full, x: x, y: y) > 0.8 && alpha(gray, x: x, y: y) > 0.2,
               "inactive dots retain the active dot radius")
