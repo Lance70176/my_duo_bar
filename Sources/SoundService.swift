@@ -72,7 +72,7 @@ enum SoundService {
     }
 }
 
-/// An output device the Headphones submenu can switch to.
+/// An output device the Sound submenu can switch to.
 struct AudioOutputDevice: Equatable, Sendable {
     var id: UInt32
     var name: String

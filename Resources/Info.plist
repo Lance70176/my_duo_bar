@@ -10,12 +10,13 @@
     <key>CFBundleLocalizations</key><array><string>zh-Hant</string><string>en</string><string>ja</string></array>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.6.0</string>
-    <key>CFBundleVersion</key><string>15</string>
+    <key>CFBundleShortVersionString</key><string>1.7.0</string>
+    <key>CFBundleVersion</key><string>16</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSFocusStatusUsageDescription</key><string>讀取是否開啟專注模式，開啟時點亮選單列中的專注圓點。不讀取具體專注模式或個人內容。</string>
+    <key>NSBluetoothAlwaysUsageDescription</key><string>用於列出已配對的藍牙裝置，並在選單中連線或中斷它們。不會搜尋、配對或讀取裝置內容。</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSLocationUsageDescription</key><string>僅用於讀取已連線的 Wi-Fi 名稱。MyDuoBar 不會取得地理座標、不儲存或上傳位置。</string>
     <key>NSLocationWhenInUseUsageDescription</key><string>僅用於讀取已連線的 Wi-Fi 名稱。不會取得地理座標。</string>

@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let focusPanel = StatusPanel(section: .focus)
     private let wifiMenu = WiFiMenuController()
     private let vpnMenu = VPNMenuController()
-    private let outputMenu = OutputMenuController()
+    private let bluetoothMenu = BluetoothMenuController()
     private let soundMenu = SoundMenuController()
     private let monitor = SystemMonitor()
     private let preferences = DotPreferences()
@@ -42,9 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         focusPanel.onOpenSettings = openSettings
         wifiMenu.onOpenSettings = openSettings
         vpnMenu.onOpenSettings = openSettings
-        outputMenu.onOpenSettings = openSettings
+        bluetoothMenu.onOpenSettings = openSettings
         soundMenu.onOpenSettings = openSettings
-        outputMenu.onOutputChanged = { [weak self] in self?.monitor.refresh() }
+        bluetoothMenu.onBluetoothChanged = { [weak self] in self?.monitor.refresh() }
+        soundMenu.onOutputChanged = { [weak self] in self?.monitor.refresh() }
         wifiMenu.onWiFiChanged = { [weak self] in self?.monitor.refresh() }
         vpnMenu.onVPNChanged = { [weak self] in self?.monitor.refresh() }
         menu.delegate = self
@@ -53,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(wifiMenu.item)
         let power = NSMenuItem(); power.view = powerPanel; menu.addItem(power)
         menu.addItem(vpnMenu.item)
-        menu.addItem(outputMenu.item)
+        menu.addItem(bluetoothMenu.item)
         menu.addItem(soundMenu.item)
         let focus = NSMenuItem(); focus.view = focusPanel; menu.addItem(focus)
         menu.addItem(.separator())
@@ -111,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         powerPanel.update(state)
         wifiMenu.update(status: state)
         vpnMenu.update(status: state)
-        outputMenu.update(status: state)
+        bluetoothMenu.update(status: state)
         soundMenu.update(status: state)
         focusPanel.update(state)
     }
@@ -128,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateMenuRows(monitor.status)
         wifiMenu.prepare()
         vpnMenu.prepare()
-        outputMenu.prepare()
+        bluetoothMenu.prepare()
         soundMenu.prepare()
         monitor.setMenuOpen(true)
     }

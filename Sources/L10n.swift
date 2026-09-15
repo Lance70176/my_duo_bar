@@ -190,10 +190,17 @@ enum L10n {
     static var volumeUnsupported: String { pick("此裝置無法調整音量", "This device's volume can't be changed", "このデバイスの音量は変更できません") }
     static var muteToggle: String { pick("切換靜音", "Turn mute on or off", "消音を切り替え") }
 
-    // MARK: Headphones submenu
     static var outputDevices: String { pick("輸出裝置", "Output", "出力装置") }
     static var noOutputDevices: String { pick("沒有可用的輸出裝置", "No Output Devices", "出力装置がありません") }
+
+    // MARK: Bluetooth submenu
+    static var bluetooth: String { pick("藍牙", "Bluetooth", "Bluetooth") }
+    static var bluetoothDevices: String { pick("裝置", "Devices", "デバイス") }
+    static var bluetoothOff: String { pick("藍牙已關閉", "Bluetooth Off", "Bluetooth オフ") }
+    static var bluetoothUnavailable: String { pick("此 Mac 沒有藍牙", "Bluetooth Unavailable", "Bluetooth を利用できません") }
+    static var noPairedDevices: String { pick("沒有已配對的裝置", "No Paired Devices", "ペアリング済みのデバイスがありません") }
     static var bluetoothSettingsMenu: String { pick("藍牙設定…", "Bluetooth Settings…", "Bluetooth 設定…") }
+    static func bluetoothToggle(_ name: String) -> String { pick("連線或中斷 \(name)", "Connect or disconnect \(name)", "\(name) を接続または切断") }
 
     // MARK: Icon guide
     static var iconGuide: String { pick("圖示說明", "Icon Guide", "アイコンの見かた") }

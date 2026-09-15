@@ -86,11 +86,12 @@ import CoreAudio
         vpnChecks()
         soundChecks()
         outputChecks()
+        bluetoothChecks()
         L10n.overrideForTesting(nil)
-        check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "headphones target Bluetooth settings")
+        check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "the Bluetooth submenu targets Bluetooth settings")
         check(SystemSettings.Page.allCases.allSatisfy { $0.url.scheme == "x-apple.systempreferences" },
               "settings links stay within the system settings application")
-        print("PASS: native settings actions, Wi-Fi, VPN, Headphones and Sound submenus, custom controls and network routing")
+        print("PASS: native settings actions, Wi-Fi, VPN, Bluetooth and Sound submenus, custom controls and network routing")
     }
 
     static func spin(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
@@ -284,53 +285,137 @@ extension PanelTests {
 }
 
 extension PanelTests {
-    /// Exercises the Headphones submenu against fake devices: the real default output is never changed.
+    /// Exercises the output device list in the Sound submenu against fake devices: the real default output is never changed.
     static func outputChecks() {
         let speakers = AudioOutputDevice(id: 1, name: "MacBook Pro 喇叭", symbol: "speaker.wave.2.fill", isHeadphone: false, isDefault: true)
         let airpods = AudioOutputDevice(id: 2, name: "AirPods Pro", symbol: "airpodspro", isHeadphone: true, isDefault: false)
         let fake = FakeOutputDeviceService([speakers, airpods])
-        let output = OutputMenuController()
-        output.service = fake
+        let sound = SoundMenuController()
+        sound.service = FakeSoundService(SoundOutput(name: "MacBook Pro 喇叭", volume: 0.5, muted: false, canSetVolume: true, canSetMute: true))
+        sound.outputService = fake
         var opened: [SystemSettings.Page] = []
         var changes = 0
-        output.onOpenSettings = { opened.append($0) }
-        output.onOutputChanged = { changes += 1 }
-        var state = SystemStatus()
-        state.audio.headphoneNames = ["AirPods Pro"]
-        output.update(status: state)
-        check(output.item.submenu === output.submenu && output.item.title == "耳機" && output.item.subtitle == "AirPods Pro",
-              "Headphones opens a submenu and shows the connected headphones")
+        sound.onOpenSettings = { opened.append($0) }
+        sound.onOutputChanged = { changes += 1 }
+        sound.update(status: SystemStatus())
 
-        output.menuWillOpen(output.submenu)
+        sound.menuWillOpen(sound.submenu)
         spin(0.2)
-        let rows = { output.submenu.items.filter { $0.representedObject is NSNumber } }
-        check(output.submenu.items.first?.isSectionHeader == true && output.submenu.items.first?.title == "輸出裝置"
-              && output.submenu.items.last?.title == "藍牙設定…", "the submenu has an Output header and ends with Bluetooth Settings")
-        check(rows().map(\.title) == ["MacBook Pro 喇叭", "AirPods Pro"] && rows().map(\.state) == [.on, .off] && rows().allSatisfy { $0.image != nil },
-              "every output device is listed with an icon and the current one checked")
+        let items = { sound.submenu.items }
+        let rows = { items().filter { $0.representedObject is NSNumber } }
+        let header = items().firstIndex { $0.isSectionHeader && $0.title == "輸出裝置" }
+        check(header != nil && items()[1].view === sound.volumeRow && items()[2].view === sound.muteRow
+              && items()[header! - 1].isSeparatorItem && items().last?.title == "聲音設定…",
+              "the Sound submenu lists output devices under their own header, after the slider and mute row")
+        check(rows().map(\.title) == ["MacBook Pro 喇叭", "AirPods Pro"] && rows().map(\.state) == [.on, .off] && rows().allSatisfy { $0.image != nil }
+              && items().firstIndex(of: rows()[0]) == header! + 1,
+              "every output device is listed with an icon right after the header, with the current one checked")
 
         rows()[1].target.map { _ = ($0 as? NSObject)?.perform(rows()[1].action, with: rows()[1]) }
         spin(0.2)
         check(fake.selections == [2] && rows().map(\.state) == [.off, .on] && changes == 1, "choosing a device makes it the default output")
-        output.select(id: 2)
+        check(items()[1].view === sound.volumeRow && items()[2].view === sound.muteRow, "replacing device rows keeps the slider and mute row")
+        sound.select(id: 2)
         spin(0.1)
         check(fake.selections == [2], "choosing the current device does nothing")
 
         fake.refuse = true
-        output.select(id: 1)
+        sound.select(id: 1)
         spin(0.2)
         check(opened == [.sound] && rows().map(\.state) == [.off, .on], "a refused switch opens Sound settings and keeps the check")
 
         fake.replace([speakers])
-        output.update(status: state)
+        sound.update(status: SystemStatus())
         spin(0.2)
         check(rows().map(\.title) == ["MacBook Pro 喇叭"], "a device that disconnects leaves the open submenu")
-        output.menuDidClose(output.submenu)
+        fake.replace([])
+        sound.reloadDevices()
+        spin(0.2)
+        check(rows().isEmpty && items()[header! + 1].title == "沒有可用的輸出裝置" && !items()[header! + 1].isEnabled,
+              "no devices shows a note in place of the rows")
+        sound.menuDidClose(sound.submenu)
 
         check(AudioOutputDevice.symbol(name: "AirPods Max", transport: nil, headphone: true) == "airpodsmax"
               && AudioOutputDevice.symbol(name: "LG HDR 4K", transport: kAudioDeviceTransportTypeHDMI, headphone: false) == "tv"
               && AudioOutputDevice.symbol(name: "Sony WH-1000XM5", transport: kAudioDeviceTransportTypeBluetooth, headphone: true) == "headphones",
               "device icons follow the device kind")
+    }
+
+    /// Exercises the Bluetooth submenu against fake devices: nothing real is connected or disconnected.
+    static func bluetoothChecks() {
+        let airpods = BluetoothDevice(id: "aa-bb", name: "AirPods Pro", symbol: "airpodspro", status: .connected)
+        let keyboard = BluetoothDevice(id: "cc-dd", name: "Magic Keyboard", symbol: "keyboard", status: .disconnected)
+        let fake = FakeBluetoothService(BluetoothState(powered: true, devices: [airpods, keyboard]))
+        let bluetooth = BluetoothMenuController()
+        bluetooth.service = fake
+        var opened: [SystemSettings.Page] = []
+        var changes = 0
+        bluetooth.onOpenSettings = { opened.append($0) }
+        bluetooth.onBluetoothChanged = { changes += 1 }
+        check(bluetooth.item.submenu === bluetooth.submenu && bluetooth.item.title == "藍牙" && bluetooth.item.subtitle == "讀取中"
+              && bluetooth.item.image != nil, "Bluetooth opens a submenu and shows the Bluetooth glyph")
+
+        bluetooth.menuWillOpen(bluetooth.submenu)
+        spin(0.2)
+        check(bluetooth.item.subtitle == "AirPods Pro", "the item lists the connected devices")
+        let rows = { bluetooth.submenu.items.compactMap { $0.view as? BluetoothRowView } }
+        check(bluetooth.submenu.items.first?.isSectionHeader == true && bluetooth.submenu.items.first?.title == "裝置"
+              && bluetooth.submenu.items.last?.title == "藍牙設定…", "the submenu has a Devices header and ends with Bluetooth Settings")
+        check(rows().map(\.device.name) == ["AirPods Pro", "Magic Keyboard"] && rows().map(\.toggleSwitch.isOn) == [true, false]
+              && rows().map(\.detailText) == ["已連線", "未連線"] && rows()[0].symbolName == "airpodspro",
+              "every paired device has a row with its icon, state and switch")
+
+        rows()[1].onToggle?()
+        check(rows()[1].detailText == "連線中…" && rows()[1].toggleSwitch.isOn && !rows()[1].toggleSwitch.isEnabled,
+              "toggling a device shows Connecting and locks its switch")
+        spin(0.3)
+        check(fake.calls == ["connect cc-dd"] && rows()[1].detailText == "已連線" && rows()[1].toggleSwitch.isEnabled && changes == 1
+              && bluetooth.item.subtitle == "AirPods Pro、Magic Keyboard", "a connected device settles and the item follows")
+
+        rows()[0].onToggle?()
+        check(rows()[0].detailText == "正在中斷…", "toggling a connected device shows Disconnecting")
+        spin(0.3)
+        check(fake.calls.last == "disconnect aa-bb" && rows()[0].detailText == "未連線" && !rows()[0].toggleSwitch.isOn && changes == 2,
+              "a disconnected device settles")
+
+        fake.refuse = true
+        rows()[0].onToggle?()
+        spin(0.3)
+        check(opened == [.bluetooth] && rows()[0].detailText == "未連線" && !rows()[0].toggleSwitch.isOn,
+              "a refused connection opens Bluetooth settings and keeps the row off")
+
+        fake.replace(BluetoothState(powered: true, devices: [BluetoothDevice(id: "cc-dd", name: "Magic Keyboard", symbol: "keyboard", status: .connected)]))
+        bluetooth.reload()
+        spin(0.2)
+        check(rows().map(\.device.name) == ["Magic Keyboard"], "a device that is unpaired leaves the open submenu")
+
+        fake.replace(BluetoothState(powered: false))
+        bluetooth.reload()
+        spin(0.2)
+        check(rows().isEmpty && bluetooth.submenu.items[1].title == "藍牙已關閉" && !bluetooth.submenu.items[1].isEnabled
+              && bluetooth.item.subtitle == "已關閉", "Bluetooth off shows a note instead of devices")
+        fake.replace(.unavailable)
+        bluetooth.reload()
+        spin(0.2)
+        check(bluetooth.item.subtitle == "此 Mac 沒有藍牙", "a Mac without Bluetooth says so")
+
+        L10n.overrideForTesting(.en)
+        bluetooth.rebuild()
+        check(bluetooth.submenu.items.last?.title == "Bluetooth Settings…" && bluetooth.item.subtitle == "Bluetooth Unavailable",
+              "the Bluetooth submenu follows the app language")
+        L10n.overrideForTesting(.zhHant)
+        bluetooth.menuDidClose(bluetooth.submenu)
+
+        check(BluetoothDevice.symbol(name: "AirPods Max", major: 4, minor: 6) == "airpodsmax"
+              && BluetoothDevice.symbol(name: "WH-1000XM5", major: 4, minor: 6) == "headphones"
+              && BluetoothDevice.symbol(name: "Boom", major: 4, minor: 5) == "hifispeaker.fill"
+              && BluetoothDevice.symbol(name: "Magic Mouse", major: 5, minor: 0x20) == "computermouse.fill"
+              && BluetoothDevice.symbol(name: "Keyboard", major: 5, minor: 0x10) == "keyboard"
+              && BluetoothDevice.symbol(name: "Pad", major: 5, minor: 0x02) == "gamecontroller.fill"
+              && BluetoothDevice.symbol(name: "iPhone", major: 2, minor: 0) == "iphone",
+              "Bluetooth device icons follow the device class")
+        let sorted = BluetoothService.sorted([keyboard, airpods])
+        check(sorted.map(\.name) == ["AirPods Pro", "Magic Keyboard"], "connected devices are listed first")
     }
 }
 
@@ -423,6 +508,33 @@ final class FakeOutputDeviceService: OutputDeviceServing, @unchecked Sendable {
             guard !_refuse else { return false }
             _selections.append(id)
             for index in _devices.indices { _devices[index].isDefault = _devices[index].id == id }
+            return true
+        }
+    }
+}
+
+/// In-memory Bluetooth devices for tests. Connects and disconnects settle on the first poll.
+final class FakeBluetoothService: BluetoothServing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _state: BluetoothState
+    private var _calls: [String] = []
+    private var _refuse = false
+    init(_ state: BluetoothState) { _state = state }
+
+    var pollInterval: TimeInterval { 0.01 }
+    var calls: [String] { lock.withLock { _calls } }
+    var refuse: Bool { get { lock.withLock { _refuse } } set { lock.withLock { _refuse = newValue } } }
+    func replace(_ state: BluetoothState) { lock.withLock { _state = state } }
+
+    func read() -> BluetoothState { lock.withLock { _state } }
+    func connect(id: String) -> Bool { set(id, connected: true, call: "connect") }
+    func disconnect(id: String) -> Bool { set(id, connected: false, call: "disconnect") }
+    private func set(_ id: String, connected: Bool, call: String) -> Bool {
+        Thread.sleep(forTimeInterval: 0.05)
+        return lock.withLock {
+            _calls.append("\(call) \(id)")
+            guard !_refuse, let index = _state.devices.firstIndex(where: { $0.id == id }) else { return false }
+            _state.devices[index].status = connected ? .connected : .disconnected
             return true
         }
     }
