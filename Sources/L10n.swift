@@ -173,6 +173,16 @@ enum L10n {
     static var secured: String { pick("需要密碼", "Secured", "パスワード保護") }
     static var wifiPower: String { pick("Wi-Fi 開關", "Wi-Fi Power", "Wi-Fi のオン/オフ") }
 
+    // MARK: VPN submenu
+    static var vpnConnecting: String { pick("連線中…", "Connecting…", "接続中…") }
+    static var vpnDisconnecting: String { pick("正在中斷…", "Disconnecting…", "切断中…") }
+    static var vpnInvalid: String { pick("設定無效", "Invalid Configuration", "構成が無効です") }
+    static var noVPNConfigurations: String { pick("系統中沒有 VPN 設定", "No VPN Configurations", "VPN 構成がありません") }
+    static var vpnSettingsMenu: String { pick("VPN 設定…", "VPN Settings…", "VPN 設定…") }
+    static var vpnOtherRouteActive: String { pick("偵測到其他 VPN 路由，無法在此切換", "Another VPN route is active; switch it in its own app", "別の VPN ルートが有効です（ここでは切り替えできません）") }
+    static var vpnSystemProxyActive: String { pick("系統代理已開啟，無法在此切換", "System proxy is on; change it in its own app", "システムプロキシがオンです（ここでは切り替えできません）") }
+    static func vpnToggle(_ name: String) -> String { pick("切換 \(name)", "Toggle \(name)", "\(name) を切り替え") }
+
     // MARK: Icon guide
     static var iconGuide: String { pick("圖示說明", "Icon Guide", "アイコンの見かた") }
     static var guideRing: String {

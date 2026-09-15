@@ -238,18 +238,17 @@ final class WiFiMenuController: NSObject, NSMenuDelegate, CLLocationManagerDeleg
 
 // MARK: - Views
 
-/// "Wi-Fi" title with a switch, like the top row of the system menu.
+/// "Wi-Fi" title with a switch, like the top row of the system menu. The whole row toggles.
 final class WiFiToggleRowView: NSView {
-    let toggle = NSSwitch()
+    let toggle: MenuSwitch
     private let onToggle: (Bool) -> Void
 
     init(on: Bool, onToggle: @escaping (Bool) -> Void) {
         self.onToggle = onToggle
+        toggle = MenuSwitch(isOn: on)
         super.init(frame: NSRect(x: 0, y: 0, width: WiFiMenuController.rowWidth, height: 34))
         let label = NSTextField(labelWithString: "Wi-Fi")
         label.font = .systemFont(ofSize: 13, weight: .semibold)
-        toggle.state = on ? .on : .off
-        toggle.controlSize = .small
         toggle.target = self; toggle.action = #selector(changed)
         toggle.setAccessibilityLabel(L10n.wifiPower)
         for view in [label, toggle] as [NSView] {
@@ -264,7 +263,13 @@ final class WiFiToggleRowView: NSView {
         ])
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    @objc private func changed() { onToggle(toggle.state == .on) }
+    @objc private func changed() { onToggle(toggle.isOn) }
+    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        toggle.toggle()
+    }
 }
 
 /// A network row: round signal badge (blue when connected), name, and a lock for secured networks.

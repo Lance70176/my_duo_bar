@@ -130,24 +130,34 @@ final class StatusPanelHeader: NSView {
     func update(preview: Bool = false) { mode.stringValue = preview ? L10n.sampleStatus : L10n.thisMac }
 }
 
-/// Battery and the four status rows. Wi-Fi lives in its own native menu item so it can open a submenu.
+/// A block of status rows. Wi-Fi and VPN are native menu items between blocks so they can open submenus:
+/// `.power` is the battery row plus the divider under it, `.devices` is headphones, sound and Focus.
 final class StatusPanel: NSView {
-    static let panelSize = NSSize(width: 314, height: 224)
+    enum Section { case power, devices }
+    static let width: CGFloat = 314
+    let section: Section
     var onOpenSettings: ((SystemSettings.Page) -> Void)?
     private let battery = StatusRow(height: 55, destination: .battery)
-    private let vpn = StatusRow(height: 35, destination: .vpn, compact: true)
     private let headphones = StatusRow(height: 35, destination: .bluetooth, compact: true)
     private let sound = StatusRow(height: 35, destination: .sound, compact: true)
     private let focus = StatusRow(height: 35, destination: .focus, compact: true)
     override var allowsVibrancy: Bool { true }
 
-    init() {
-        super.init(frame: NSRect(origin: .zero, size: Self.panelSize))
-        let separator = NSBox()
-        separator.boxType = .separator
-        separator.heightAnchor.constraint(equalToConstant: 1).isActive = true
-        let gap = NSView(); gap.heightAnchor.constraint(equalToConstant: 5).isActive = true
-        let stack = NSStackView(views: [battery, separator, gap, vpn, headphones, sound, focus])
+    init(section: Section) {
+        self.section = section
+        let height: CGFloat = section == .power ? 2 + 55 + 6 : 3 * 35 + 21
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: height))
+        let views: [NSView]
+        switch section {
+        case .power:
+            let separator = NSBox()
+            separator.boxType = .separator
+            separator.heightAnchor.constraint(equalToConstant: 1).isActive = true
+            views = [battery, separator]
+        case .devices:
+            views = [headphones, sound, focus]
+        }
+        let stack = NSStackView(views: views)
         stack.orientation = .vertical
         stack.alignment = .leading; stack.spacing = 0
         for row in stack.arrangedSubviews { row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
@@ -155,31 +165,32 @@ final class StatusPanel: NSView {
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 2)
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: section == .power ? 2 : 0)
         ])
-        for row in [battery, vpn, headphones, sound, focus] {
+        for row in views.compactMap({ $0 as? StatusRow }) {
             row.onActivate = { [weak self, weak row] in
                 guard let row else { return }
                 self?.onOpenSettings?(row.destination)
             }
         }
-        vpn.setNavigationEnabled(false)
         update(SystemStatus())
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(_ state: SystemStatus) {
-        let batterySymbol = state.battery.charging ? "battery.100percent.bolt" : "battery.75percent"
-        battery.update(symbol: state.battery.present ? batterySymbol : "powerplug",
-                       title: L10n.battery, detail: state.battery.detail, value: state.battery.title)
-        vpn.update(symbol: "key.horizontal", title: "VPN", value: state.vpn.title, active: state.vpn.active)
-        vpn.toolTip = state.vpn.hasUnidentifiedTunnel ? L10n.unidentifiedTunnelHelp : state.vpn.title
-        headphones.update(symbol: "headphones", title: L10n.headphones, value: state.audio.headphoneTitle, active: state.audio.headphoneActive)
-        sound.update(symbol: state.audio.muted == true ? "speaker.slash.fill" : "speaker.wave.2",
-                     title: L10n.sound, value: state.audio.soundTitle)
-        sound.toolTip = state.audio.outputName + " · " + state.audio.soundTitle
-        focus.update(symbol: state.focus.symbol, title: L10n.focus, value: state.focus.title, active: state.focus.isActive)
-        if case .unavailable(let reason) = state.focus { focus.toolTip = reason }
+        switch section {
+        case .power:
+            let batterySymbol = state.battery.charging ? "battery.100percent.bolt" : "battery.75percent"
+            battery.update(symbol: state.battery.present ? batterySymbol : "powerplug",
+                           title: L10n.battery, detail: state.battery.detail, value: state.battery.title)
+        case .devices:
+            headphones.update(symbol: "headphones", title: L10n.headphones, value: state.audio.headphoneTitle, active: state.audio.headphoneActive)
+            sound.update(symbol: state.audio.muted == true ? "speaker.slash.fill" : "speaker.wave.2",
+                         title: L10n.sound, value: state.audio.soundTitle)
+            sound.toolTip = state.audio.outputName + " · " + state.audio.soundTitle
+            focus.update(symbol: state.focus.symbol, title: L10n.focus, value: state.focus.title, active: state.focus.isActive)
+            if case .unavailable(let reason) = state.focus { focus.toolTip = reason }
+        }
     }
 }
 

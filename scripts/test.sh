@@ -21,6 +21,7 @@ xcrun swiftc -O "${DUOBAR_TEST_FLAGS[@]}" -module-cache-path "$DUOBAR_ROOT/build
     "$DUOBAR_ROOT/Sources/DuoIcon.swift" "$DUOBAR_ROOT/Sources/IconMotion.swift" \
     "$DUOBAR_ROOT/Sources/SystemSettings.swift" "$DUOBAR_ROOT/Sources/StatusPanel.swift" \
     "$DUOBAR_ROOT/Sources/WiFiNetworks.swift" "$DUOBAR_ROOT/Sources/WiFiService.swift" "$DUOBAR_ROOT/Sources/WiFiMenu.swift" \
+    "$DUOBAR_ROOT/Sources/MenuControls.swift" "$DUOBAR_ROOT/Sources/VPNService.swift" "$DUOBAR_ROOT/Sources/VPNMenu.swift" \
     "$DUOBAR_ROOT/Tests/PanelTests.swift" -o "$DUOBAR_ROOT/build/tests/PanelTests"
 "$DUOBAR_ROOT/build/tests/PanelTests"
 

@@ -7,8 +7,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var item: NSStatusItem!
     private let menu = NSMenu()
     private let panelHeader = StatusPanelHeader()
-    private let panel = StatusPanel()
+    private let powerPanel = StatusPanel(section: .power)
+    private let devicesPanel = StatusPanel(section: .devices)
     private let wifiMenu = WiFiMenuController()
+    private let vpnMenu = VPNMenuController()
     private let monitor = SystemMonitor()
     private let preferences = DotPreferences()
     private let canvas = StatusIconView()
@@ -30,20 +32,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             canvas.autoresizingMask = [.width, .height]
             button.addSubview(canvas)
         }
-        panel.onOpenSettings = { [weak self] page in
+        let openSettings: (SystemSettings.Page) -> Void = { [weak self] page in
             self?.menu.cancelTracking()
             DispatchQueue.main.async { SystemSettings.open(page) }
         }
-        wifiMenu.onOpenSettings = { [weak self] page in
-            self?.menu.cancelTracking()
-            DispatchQueue.main.async { SystemSettings.open(page) }
-        }
+        powerPanel.onOpenSettings = openSettings
+        devicesPanel.onOpenSettings = openSettings
+        wifiMenu.onOpenSettings = openSettings
+        vpnMenu.onOpenSettings = openSettings
         wifiMenu.onWiFiChanged = { [weak self] in self?.monitor.refresh() }
+        vpnMenu.onVPNChanged = { [weak self] in self?.monitor.refresh() }
         menu.delegate = self
         menu.autoenablesItems = false
         let header = NSMenuItem(); header.view = panelHeader; menu.addItem(header)
         menu.addItem(wifiMenu.item)
-        let content = NSMenuItem(); content.view = panel; menu.addItem(content)
+        let power = NSMenuItem(); power.view = powerPanel; menu.addItem(power)
+        menu.addItem(vpnMenu.item)
+        let devices = NSMenuItem(); devices.view = devicesPanel; menu.addItem(devices)
         menu.addItem(.separator())
         for menuItem in [systemIconsItem, settingsItem, quitItem] {
             menuItem.target = self; menu.addItem(menuItem)
@@ -89,26 +94,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func languageDidChange() {
         applyMenuTitles()
         panelHeader.update()
-        panel.update(monitor.status)
-        wifiMenu.update(status: monitor.status)
+        updateMenuRows(monitor.status)
         item.button?.setAccessibilityLabel(monitor.status.accessibilitySummary)
         settings?.update(monitor.status)
         monitor.refresh()
+    }
+
+    private func updateMenuRows(_ state: SystemStatus) {
+        powerPanel.update(state)
+        wifiMenu.update(status: state)
+        vpnMenu.update(status: state)
+        devicesPanel.update(state)
     }
 
     private func update(_ state: SystemStatus) {
         renderIcon()
         item.button?.setAccessibilityLabel(state.accessibilitySummary)
         // Deliberately no tracking area or hover expansion.
-        panel.update(state)
-        wifiMenu.update(status: state)
+        updateMenuRows(state)
         settings?.update(state)
     }
     func menuWillOpen(_ menu: NSMenu) {
         canvas.animateTurn()
-        panel.update(monitor.status)
-        wifiMenu.update(status: monitor.status)
+        updateMenuRows(monitor.status)
         wifiMenu.prepare()
+        vpnMenu.prepare()
         monitor.setMenuOpen(true)
     }
     func menuDidClose(_ menu: NSMenu) { monitor.setMenuOpen(false) }
