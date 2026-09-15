@@ -154,16 +154,21 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private static func guideImage(_ draw: @escaping () -> Void) -> NSImage {
         NSImage(size: NSSize(width: 22, height: 16), flipped: false) { _ in draw(); return true }
     }
+    /// The same capsule track as the menu bar icon, scaled into the 22 × 16 guide image.
     private static func drawRing(_ color: NSColor, fraction: CGFloat) {
-        let center = NSPoint(x: 11, y: 8)
-        color.withAlphaComponent(0.25).setStroke()
-        let track = NSBezierPath(); track.lineWidth = 2; track.lineCapStyle = .round
-        track.appendArc(withCenter: center, radius: 6.5, startAngle: 210, endAngle: -30, clockwise: true)
-        track.stroke()
-        color.setStroke()
-        let arc = NSBezierPath(); arc.lineWidth = 2; arc.lineCapStyle = .round
-        arc.appendArc(withCenter: center, radius: 6.5, startAngle: 210, endAngle: 210 - 240 * fraction, clockwise: true)
-        arc.stroke()
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        let scale: CGFloat = 20 / DuoIcon.ringSize.width
+        var transform = CGAffineTransform(translationX: 11 - DuoIcon.center.x * scale, y: 8 - DuoIcon.center.y * scale)
+            .scaledBy(x: scale, y: scale)
+        ctx.saveGState()
+        ctx.setLineWidth(2); ctx.setLineCap(.round); ctx.setLineJoin(.round)
+        ctx.setStrokeColor(color.withAlphaComponent(0.25).cgColor)
+        ctx.addPath(DuoIcon.trackPath().copy(using: &transform) ?? CGMutablePath())
+        ctx.strokePath()
+        ctx.setStrokeColor(color.cgColor)
+        ctx.addPath(DuoIcon.arcPath(from: DuoIcon.trackStart, span: DuoIcon.trackSpan * fraction).copy(using: &transform) ?? CGMutablePath())
+        ctx.strokePath()
+        ctx.restoreGState()
     }
     /// Three of four marks lit, as the icon shows a volume between 50% and 75%.
     private static func drawVolumeMarks(_ color: NSColor) {
