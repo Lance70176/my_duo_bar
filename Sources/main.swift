@@ -11,10 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let focusPanel = StatusPanel()
     private let wifiMenu = WiFiMenuController()
     private let vpnMenu = VPNMenuController()
-    private let outputMenu = OutputMenuController()
+    private let bluetoothMenu = BluetoothMenuController()
     private let soundMenu = SoundMenuController()
     private let monitor = SystemMonitor()
-    private let preferences = DotPreferences()
+    private let preferences = IconPreferences()
     private let canvas = StatusIconView()
     private var settings: SettingsController?
     private let systemIconsItem = NSMenuItem(title: "", action: #selector(openSystemIcons), keyEquivalent: "")
@@ -42,9 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         focusPanel.onOpenSettings = openSettings
         wifiMenu.onOpenSettings = openSettings
         vpnMenu.onOpenSettings = openSettings
-        outputMenu.onOpenSettings = openSettings
+        bluetoothMenu.onOpenSettings = openSettings
         soundMenu.onOpenSettings = openSettings
-        outputMenu.onOutputChanged = { [weak self] in self?.monitor.refresh() }
+        bluetoothMenu.onBluetoothChanged = { [weak self] in self?.monitor.refresh() }
+        soundMenu.onOutputChanged = { [weak self] in self?.monitor.refresh() }
         batteryMenu.onChargeLimitChanged = { [weak self] in self?.monitor.refresh() }
         wifiMenu.onWiFiChanged = { [weak self] in self?.monitor.refresh() }
         vpnMenu.onVPNChanged = { [weak self] in self?.monitor.refresh() }
@@ -54,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(wifiMenu.item)
         menu.addItem(batteryMenu.item)
         menu.addItem(vpnMenu.item)
-        menu.addItem(outputMenu.item)
+        menu.addItem(bluetoothMenu.item)
         menu.addItem(soundMenu.item)
         let focus = NSMenuItem(); focus.view = focusPanel; menu.addItem(focus)
         menu.addItem(.separator())
@@ -112,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         batteryMenu.update(status: state)
         wifiMenu.update(status: state)
         vpnMenu.update(status: state)
-        outputMenu.update(status: state)
+        bluetoothMenu.update(status: state)
         soundMenu.update(status: state)
         focusPanel.update(state)
     }
@@ -130,14 +131,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         wifiMenu.prepare()
         batteryMenu.prepare()
         vpnMenu.prepare()
-        outputMenu.prepare()
+        bluetoothMenu.prepare()
         soundMenu.prepare()
         monitor.setMenuOpen(true)
     }
     func menuDidClose(_ menu: NSMenu) { monitor.setMenuOpen(false) }
 
     private func renderIcon() {
-        canvas.update(monitor.status, layout: preferences.layout)
+        canvas.update(monitor.status, showVolume: preferences.showVolume)
     }
 
     @objc private func showSettings() {

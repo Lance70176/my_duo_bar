@@ -30,30 +30,37 @@ import Foundation
         if case .unavailable = FocusState.shared(nil) { check(true, "unshared focus stays unknown") }
         else { check(false, "unshared focus must not become off") }
         check(SystemStatus.preview().glyphs == [.vpn, .headphones, .mute, .focus], "four active states in consistent order")
-        check(DotLayout().visible == StatusGlyph.allCases, "all four dots stay visible when inactive")
-        let normalized = DotLayout(order: [.focus, .focus, .vpn])
-        check(normalized.order == [.focus, .vpn, .headphones, .mute], "partial or duplicated preference order is repaired")
-        var layout = DotLayout()
-        layout.move(.vpn, by: 1)
-        check(layout.visible == [.headphones, .vpn, .mute, .focus], "reorder changes dot positions")
-        layout.hidden.insert(.vpn)
-        check(layout.visible == [.headphones, .mute, .focus], "hidden VPN leaves other positions ordered")
-        layout.hidden = Set(StatusGlyph.allCases)
-        check(layout.visible.isEmpty, "all dots can be hidden")
+        var audio = AudioState()
+        check(audio.volumeLevel == nil && !audio.showsMuteBar, "unknown volume lights no mark and shows no bar")
+        for (volume, marks) in [(0, 0), (1, 1), (25, 1), (26, 2), (50, 2), (51, 3), (75, 3), (76, 4), (100, 4)] {
+            audio.volume = volume
+            check(audio.volumeLevel == marks, "\(volume)% lights \(marks) of the four volume marks")
+        }
+        check(!audio.showsMuteBar, "an unmuted output keeps the marks")
+        audio.muted = true
+        check(audio.showsMuteBar, "mute shows the bar instead")
+        check(AudioState(headphoneNames: ["AirPods Pro"]).headphoneSymbol == "airpodspro"
+              && AudioState(headphoneNames: ["AirPods Max"]).headphoneSymbol == "airpodsmax"
+              && AudioState(headphoneNames: ["Sony WH-1000XM5"]).headphoneSymbol == "headphones",
+              "the headphone symbol shown on connect follows the device name")
         // A fixed suite name: macOS can leave an empty plist per domain, so random names would pile up.
         let suite = "com.rex.myduobar.tests"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         defer { defaults.removePersistentDomain(forName: suite) }
-        let preferences = DotPreferences(defaults: defaults)
-        preferences.move(.focus, by: -1)
-        preferences.setVisible(false, for: .vpn)
-        let restored = DotPreferences(defaults: defaults)
-        check(restored.layout.visible == [.headphones, .focus, .mute], "order and hidden states survive reload")
-        restored.setVisible(true, for: .vpn)
-        check(restored.layout.visible == [.vpn, .headphones, .focus, .mute], "reshown dot retains its chosen order")
-        check(!StatusGlyph.focus.isActive(in: unknown), "unshared focus never lights a dot")
-        check(StatusGlyph.allCases.allSatisfy { $0.isActive(in: SystemStatus.preview()) }, "each active state lights its own dot")
+        let preferences = IconPreferences(defaults: defaults)
+        check(preferences.showVolume, "the volume marks show by default")
+        var changes = 0
+        preferences.onChange = { changes += 1 }
+        preferences.setShowVolume(false)
+        preferences.setShowVolume(false)
+        check(changes == 1 && !preferences.showVolume, "hiding the marks notifies once")
+        let restored = IconPreferences(defaults: defaults)
+        check(!restored.showVolume, "the hidden choice survives reload")
+        restored.setShowVolume(true)
+        check(IconPreferences(defaults: defaults).showVolume, "showing the marks again is saved")
+        check(!StatusGlyph.focus.isActive(in: unknown), "unshared focus never counts as active")
+        check(StatusGlyph.allCases.allSatisfy { $0.isActive(in: SystemStatus.preview()) }, "each active state reports itself")
         let before = SystemStatus.preview()
         check(!before.shouldAnimate(from: before), "unchanged state does not animate")
         var changed = before; changed.battery.percent = 62

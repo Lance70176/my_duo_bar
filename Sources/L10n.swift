@@ -203,10 +203,19 @@ enum L10n {
     static var volumeUnsupported: String { pick("此裝置無法調整音量", "This device's volume can't be changed", "このデバイスの音量は変更できません") }
     static var muteToggle: String { pick("切換靜音", "Turn mute on or off", "消音を切り替え") }
 
-    // MARK: Headphones submenu
     static var outputDevices: String { pick("輸出裝置", "Output", "出力装置") }
     static var noOutputDevices: String { pick("沒有可用的輸出裝置", "No Output Devices", "出力装置がありません") }
+    static var inputDevices: String { pick("輸入裝置", "Input", "入力装置") }
+    static var noInputDevices: String { pick("沒有可用的輸入裝置", "No Input Devices", "入力装置がありません") }
+
+    // MARK: Bluetooth submenu
+    static var bluetooth: String { pick("藍牙", "Bluetooth", "Bluetooth") }
+    static var bluetoothDevices: String { pick("裝置", "Devices", "デバイス") }
+    static var bluetoothOff: String { pick("藍牙已關閉", "Bluetooth Off", "Bluetooth オフ") }
+    static var bluetoothUnavailable: String { pick("此 Mac 沒有藍牙", "Bluetooth Unavailable", "Bluetooth を利用できません") }
+    static var noPairedDevices: String { pick("沒有已配對的裝置", "No Paired Devices", "ペアリング済みのデバイスがありません") }
     static var bluetoothSettingsMenu: String { pick("藍牙設定…", "Bluetooth Settings…", "Bluetooth 設定…") }
+    static func bluetoothToggle(_ name: String) -> String { pick("連線或中斷 \(name)", "Connect or disconnect \(name)", "\(name) を接続または切断") }
 
     // MARK: Icon guide
     static var iconGuide: String { pick("圖示說明", "Icon Guide", "アイコンの見かた") }
@@ -218,17 +227,17 @@ enum L10n {
     static var guideRingGreen: String { pick("綠色外圈：已接上電源。", "Green ring: connected to power.", "緑の外周：電源に接続中。") }
     static var guideRingYellow: String { pick("黃色外圈：低耗電模式已開啟。", "Yellow ring: Low Power Mode is on.", "黄色の外周：低電力モードがオン。") }
     static var guideCenter: String {
-        pick("中間：Wi-Fi 訊號強度，斜線代表未連線，使用有線網路時顯示網路圖示。",
-             "Center: Wi-Fi signal strength. A slash means not connected; a network symbol means a wired connection.",
-             "中央：Wi-Fi の電波強度。斜線は未接続、ネットワーク記号は有線接続を表します。")
+        pick("中間：Wi-Fi 訊號強度，斜線代表未連線，使用有線網路時顯示網路圖示。連接耳機時會短暫顯示耳機圖示。",
+             "Center: Wi-Fi signal strength. A slash means not connected; a network symbol means a wired connection. Headphones show here briefly when they connect.",
+             "中央：Wi-Fi の電波強度。斜線は未接続、ネットワーク記号は有線接続を表します。ヘッドフォンを接続すると、しばらくその記号を表示します。")
     }
-    static func guideDots(_ titles: [String]) -> String {
-        guard !titles.isEmpty else {
-            return pick("底部圓點：目前全部隱藏。", "Bottom dots: all hidden.", "下部のドット：すべて非表示です。")
-        }
-        return pick("底部圓點：由左到右為\(titles.joined(separator: "、"))。點亮代表開啟，變灰代表未開啟。",
-                    "Bottom dots, left to right: \(titles.joined(separator: ", ")). Lit means on; gray means off.",
-                    "下部のドット：左から\(titles.joined(separator: "、"))。点灯はオン、グレーはオフです。")
+    static var guideVolume: String {
+        pick("底部：音量，每一點代表 25%，點亮越多音量越大；靜音時變成一條橫線。",
+             "Bottom: volume. Each mark is 25%; more lit marks mean louder. While muted, a single bar appears instead.",
+             "下部：音量。1 つの点が 25% で、点灯が多いほど大きい音量です。消音中は 1 本の横線になります。")
+    }
+    static var guideVolumeHidden: String {
+        pick("底部：音量目前已隱藏。", "Bottom: volume is hidden.", "下部：音量は非表示です。")
     }
 
     // MARK: Panel
@@ -265,12 +274,13 @@ enum L10n {
              "Position: hold ⌘ and drag it to the left of Control Center. macOS remembers where you put it.",
              "位置：⌘ キーを押しながらコントロールセンターの左側へドラッグします。macOS がその位置を記憶します。")
     }
-    static var bottomDots: String { pick("底部圓點", "Bottom Dots", "下部のドット") }
-    static var bottomDotsNote: String {
-        pick("從左到右排列。圓點大小一致，開啟時點亮，未開啟時變灰。取消勾選可隱藏這一項。",
-             "Ordered left to right. All dots are the same size: lit when on, dimmed when off. Uncheck an item to hide it.",
-             "左から右の順に並びます。ドットはすべて同じ大きさで、オンのときは点灯し、オフのときはグレーになります。チェックを外すと非表示になります。")
+    static var bottomVolume: String { pick("底部音量", "Bottom Volume", "下部の音量") }
+    static var bottomVolumeNote: String {
+        pick("圖示底部的四點顯示目前輸出裝置的音量，每點 25%；靜音時變成一條橫線。取消勾選可隱藏。",
+             "The four marks at the bottom of the icon show the current output's volume, 25% each; while muted they become a single bar. Uncheck to hide them.",
+             "アイコン下部の 4 つの点は現在の出力装置の音量を 25% 刻みで示し、消音中は 1 本の横線になります。チェックを外すと非表示になります。")
     }
+    static var showVolumeMarks: String { pick("在圖示底部顯示音量", "Show volume at the bottom of the icon", "アイコンの下部に音量を表示") }
     static var tidyMenuBar: String { pick("整理系統選單列", "Tidy the Menu Bar", "メニューバーを整理") }
     static var tidyMenuBarNote: String {
         pick("在系統設定中關閉原生 Wi-Fi、電池的選單列顯示，即可留出空間。",
@@ -281,16 +291,11 @@ enum L10n {
     static var allowFocus: String { pick("允許讀取專注狀態…", "Allow Focus Access…", "集中モードの読み取りを許可…") }
     static var allowWiFiName: String { pick("允許顯示 Wi-Fi 名稱…", "Allow Wi-Fi Name…", "Wi-Fi 名の表示を許可…") }
     static var statusAccessNote: String {
-        pick("顯示 Wi-Fi 名稱需要定位服務權限，App 不會取得地理座標。專注狀態未共享時，圓點保持灰色，詳細資訊會標示「狀態未共享」。",
-             "Showing the Wi-Fi name requires Location Services permission; the app never reads your coordinates. When Focus status isn't shared, its dot stays gray and details show “Not Shared”.",
-             "Wi-Fi 名の表示には位置情報サービスの許可が必要ですが、座標は取得しません。集中モードの状態が共有されていない場合、ドットはグレーのままで、詳細に「共有されていません」と表示されます。")
+        pick("顯示 Wi-Fi 名稱需要定位服務權限，App 不會取得地理座標。專注狀態未共享時，選單中會標示「狀態未共享」。",
+             "Showing the Wi-Fi name requires Location Services permission; the app never reads your coordinates. When Focus status isn't shared, the menu shows “Not Shared”.",
+             "Wi-Fi 名の表示には位置情報サービスの許可が必要ですが、座標は取得しません。集中モードの状態が共有されていない場合、メニューに「共有されていません」と表示されます。")
     }
     static func versionFooter(_ version: String) -> String { pick("\(version) · 本機執行", "\(version) · Runs locally", "\(version) · ローカルで動作") }
-    static func showDot(_ title: String) -> String { pick("顯示\(title)圓點", "Show \(title) dot", "\(title)のドットを表示") }
-    static func moveEarlier(_ title: String) -> String { pick("\(title)向前移", "Move \(title) earlier", "\(title)を前へ移動") }
-    static func moveLater(_ title: String) -> String { pick("\(title)向後移", "Move \(title) later", "\(title)を後ろへ移動") }
-    static var moveLeft: String { pick("向左移動", "Move Left", "左へ移動") }
-    static var moveRight: String { pick("向右移動", "Move Right", "右へ移動") }
     static var focusPrompt: String {
         pick("按一下下方按鈕，並在系統對話框中允許讀取。另外還需在系統設定中開啟「共享專注狀態」。",
              "Click the button below and allow access in the system dialog. Also turn on “Share Focus Status” in System Settings.",

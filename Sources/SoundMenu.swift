@@ -1,6 +1,7 @@
 import AppKit
 
-/// The Sound item in the status menu and its submenu: a volume slider and a mute switch for the current output.
+/// The Sound item in the status menu and its submenu: a volume slider and a mute switch for the current
+/// output, then every output and input device with the current one checked, like the system Sound menu.
 @MainActor
 final class SoundMenuController: NSObject, NSMenuDelegate {
     static let rowWidth: CGFloat = 290
@@ -14,11 +15,23 @@ final class SoundMenuController: NSObject, NSMenuDelegate {
     var onOpenSettings: ((SystemSettings.Page) -> Void)?
     /// Runs the Core Audio calls. Replaceable in tests so the real volume is never touched.
     var service: SoundServing = SystemSoundService()
+    /// Lists and switches output devices. Replaceable in tests so the real output is never changed.
+    var outputService: OutputDeviceServing = SystemOutputDeviceService()
+    /// Lists and switches input devices. Replaceable in tests so the real input is never changed.
+    var inputService: InputDeviceServing = SystemInputDeviceService()
+    /// Called after switching the output so the status monitor re-reads audio.
+    var onOutputChanged: (() -> Void)?
 
     let volumeRow = VolumeRowView()
     let muteRow = SwitchRowView(width: SoundMenuController.rowWidth)
     private let worker = DispatchQueue(label: "com.rex.myduobar.sound", qos: .userInitiated)
     private(set) var output: SoundOutput?
+    private(set) var devices: [AudioOutputDevice]?
+    private(set) var inputs: [AudioInputDevice]?
+    /// The Output header; device rows sit right after it and are replaced without touching the slider.
+    private var outputHeader: NSMenuItem?
+    /// The Input header; input rows sit right after it and are replaced on their own.
+    private var inputHeader: NSMenuItem?
     private var submenuOpen = false
     private var lastLocalChange: Date?
     private var settleGeneration = 0
@@ -56,18 +69,20 @@ final class SoundMenuController: NSObject, NSMenuDelegate {
         item.image = NSImage(systemSymbolName: Self.symbol(muted: audio.muted == true, percent: audio.volume), accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(pointSize: 15, weight: .medium))
         item.setAccessibilityLabel([item.title, item.subtitle].compactMap { $0 }.joined(separator: ", "))
-        // Volume and mute listeners refresh the status; follow them while the submenu is visible.
-        if submenuOpen { reload() }
+        // Volume, mute and device listeners refresh the status; follow them while the submenu is visible.
+        if submenuOpen { reload(); reloadDevices(); reloadInputs() }
     }
 
     /// Called when the status menu opens, so the rows are current before the submenu appears.
-    func prepare() { reload() }
+    func prepare() { reload(); reloadDevices(); reloadInputs() }
 
     func menuWillOpen(_ menu: NSMenu) {
         guard menu === submenu else { return }
         submenuOpen = true
         rebuild()
         reload()
+        reloadDevices()
+        reloadInputs()
     }
     func menuDidClose(_ menu: NSMenu) {
         if menu === submenu { submenuOpen = false }
@@ -109,10 +124,167 @@ final class SoundMenuController: NSObject, NSMenuDelegate {
         mute.view = muteRow
         submenu.addItem(mute)
         submenu.addItem(.separator())
+        let header = NSMenuItem.sectionHeader(title: L10n.outputDevices)
+        outputHeader = header
+        submenu.addItem(header)
+        submenu.addItem(.separator())
+        let input = NSMenuItem.sectionHeader(title: L10n.inputDevices)
+        inputHeader = input
+        submenu.addItem(input)
+        submenu.addItem(.separator())
         let settings = NSMenuItem(title: L10n.soundSettingsMenu, action: #selector(openSoundSettings), keyEquivalent: "")
         settings.target = self
         submenu.addItem(settings)
         refreshRows()
+        rebuildDeviceRows()
+        rebuildInputRows()
+    }
+
+    // MARK: Output devices
+
+    func reloadDevices() {
+        let service = self.outputService
+        worker.async { [weak self] in
+            let list = service.outputDevices()
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.applyDevices(list) } }
+        }
+    }
+
+    func applyDevices(_ list: [AudioOutputDevice]) {
+        guard list != devices else { return }
+        devices = list
+        if submenuOpen { rebuildDeviceRows() }
+    }
+
+    /// Replaces only the device rows, so the slider and mute row keep their views while a drag is in progress.
+    private func rebuildDeviceRows() {
+        guard let outputHeader, let start = submenu.items.firstIndex(of: outputHeader) else { return }
+        for item in submenu.items where item.tag == Self.deviceRowTag { submenu.removeItem(item) }
+        var rows: [NSMenuItem] = []
+        if let devices {
+            if devices.isEmpty { rows.append(note(L10n.noOutputDevices)) }
+            for device in devices {
+                let row = NSMenuItem(title: device.name, action: #selector(chooseDevice(_:)), keyEquivalent: "")
+                row.target = self
+                row.representedObject = NSNumber(value: device.id)
+                row.state = device.isDefault ? .on : .off
+                row.image = (NSImage(systemSymbolName: device.symbol, accessibilityDescription: nil)
+                             ?? NSImage(systemSymbolName: "speaker.wave.2.fill", accessibilityDescription: nil))?
+                    .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
+                rows.append(row)
+            }
+        } else {
+            rows.append(note(L10n.reading))
+        }
+        for (offset, row) in rows.enumerated() {
+            row.tag = Self.deviceRowTag
+            submenu.insertItem(row, at: start + 1 + offset)
+        }
+    }
+    private static let deviceRowTag = 7
+
+    private func note(_ text: String) -> NSMenuItem {
+        let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
+    @objc private func chooseDevice(_ sender: NSMenuItem) {
+        guard let id = (sender.representedObject as? NSNumber)?.uint32Value else { return }
+        select(id: id)
+    }
+
+    /// Switches the default output. If macOS refuses, Sound settings opens instead.
+    func select(id: UInt32) {
+        guard let index = devices?.firstIndex(where: { $0.id == id }), devices?[index].isDefault == false else { return }
+        let service = self.outputService
+        let sound = self.service
+        worker.async { [weak self] in
+            let switched = service.selectOutput(id: id)
+            let list = service.outputDevices()
+            let fresh = sound.read()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.applyDevices(list)
+                    if switched {
+                        self.apply(fresh)
+                        self.onOutputChanged?()
+                    } else {
+                        self.closeMenus()
+                        self.onOpenSettings?(.sound)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Input devices
+
+    func reloadInputs() {
+        let service = self.inputService
+        worker.async { [weak self] in
+            let list = service.inputDevices()
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.applyInputs(list) } }
+        }
+    }
+
+    func applyInputs(_ list: [AudioInputDevice]) {
+        guard list != inputs else { return }
+        inputs = list
+        if submenuOpen { rebuildInputRows() }
+    }
+
+    /// Replaces only the input rows; the output rows and the slider are left alone.
+    private func rebuildInputRows() {
+        guard let inputHeader, let start = submenu.items.firstIndex(of: inputHeader) else { return }
+        for item in submenu.items where item.tag == Self.inputRowTag { submenu.removeItem(item) }
+        var rows: [NSMenuItem] = []
+        if let inputs {
+            if inputs.isEmpty { rows.append(note(L10n.noInputDevices)) }
+            for device in inputs {
+                let row = NSMenuItem(title: device.name, action: #selector(chooseInput(_:)), keyEquivalent: "")
+                row.target = self
+                row.representedObject = NSNumber(value: device.id)
+                row.state = device.isDefault ? .on : .off
+                row.image = (NSImage(systemSymbolName: device.symbol, accessibilityDescription: nil)
+                             ?? NSImage(systemSymbolName: "mic.fill", accessibilityDescription: nil))?
+                    .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
+                rows.append(row)
+            }
+        } else {
+            rows.append(note(L10n.reading))
+        }
+        for (offset, row) in rows.enumerated() {
+            row.tag = Self.inputRowTag
+            submenu.insertItem(row, at: start + 1 + offset)
+        }
+    }
+    private static let inputRowTag = 8
+
+    @objc private func chooseInput(_ sender: NSMenuItem) {
+        guard let id = (sender.representedObject as? NSNumber)?.uint32Value else { return }
+        selectInput(id: id)
+    }
+
+    /// Switches the default input. If macOS refuses, Sound settings opens instead.
+    func selectInput(id: UInt32) {
+        guard let index = inputs?.firstIndex(where: { $0.id == id }), inputs?[index].isDefault == false else { return }
+        let service = self.inputService
+        worker.async { [weak self] in
+            let switched = service.selectInput(id: id)
+            let list = service.inputDevices()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.applyInputs(list)
+                    if !switched {
+                        self.closeMenus()
+                        self.onOpenSettings?(.sound)
+                    }
+                }
+            }
+        }
     }
 
     private func refreshRows() {
@@ -229,6 +401,28 @@ struct SystemSoundService: SoundServing {
     func read() -> SoundOutput { SoundService.read() }
     func setVolume(_ volume: Float) -> Bool { SoundService.setVolume(volume) }
     func setMuted(_ muted: Bool) -> Bool { SoundService.setMuted(muted) }
+}
+
+/// The Core Audio calls the output device list needs; `SystemOutputDeviceService` is the real one.
+protocol OutputDeviceServing: Sendable {
+    func outputDevices() -> [AudioOutputDevice]
+    func selectOutput(id: UInt32) -> Bool
+}
+
+struct SystemOutputDeviceService: OutputDeviceServing {
+    func outputDevices() -> [AudioOutputDevice] { SoundService.outputDevices() }
+    func selectOutput(id: UInt32) -> Bool { SoundService.selectOutput(id: id) }
+}
+
+/// The Core Audio calls the input device list needs; `SystemInputDeviceService` is the real one.
+protocol InputDeviceServing: Sendable {
+    func inputDevices() -> [AudioInputDevice]
+    func selectInput(id: UInt32) -> Bool
+}
+
+struct SystemInputDeviceService: InputDeviceServing {
+    func inputDevices() -> [AudioInputDevice] { SoundService.inputDevices() }
+    func selectInput(id: UInt32) -> Bool { SoundService.selectInput(id: id) }
 }
 
 /// Output device name and level above a slider with quiet and loud speaker marks.

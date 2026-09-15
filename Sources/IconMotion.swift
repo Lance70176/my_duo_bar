@@ -4,7 +4,10 @@ struct IconFrame {
     var percent: CGFloat?
     var charging: CGFloat
     var ringAngle: CGFloat = 0
-    var active: [StatusGlyph: CGFloat]
+    /// Volume marks lit at the bottom (0...4); nil when the level is unknown.
+    var volumeLevel: Int?
+    /// The bottom shows one bar instead of the marks.
+    var muted = false
     var previousWiFi: WiFiState?
     var wifiBlend: CGFloat = 1
     var chargeSweep: CGFloat?
@@ -12,7 +15,7 @@ struct IconFrame {
 
     static func steady(_ status: SystemStatus) -> IconFrame {
         IconFrame(percent: status.battery.percent.map(CGFloat.init), charging: status.battery.connectedToPower ? 1 : 0,
-                  active: Dictionary(uniqueKeysWithValues: StatusGlyph.allCases.map { ($0, $0.isActive(in: status) ? 1 : 0) }))
+                  volumeLevel: status.audio.volumeLevel, muted: status.audio.showsMuteBar)
     }
 }
 

@@ -25,7 +25,7 @@ import AppKit
         defaults.removePersistentDomain(forName: suite)
         defer { defaults.removePersistentDomain(forName: suite) }
         L10n.useDefaultsSuiteForTesting(suite)
-        let controller = SettingsController(preferences: DotPreferences(defaults: defaults))
+        let controller = SettingsController(preferences: IconPreferences(defaults: defaults))
         var languageChanges = 0
         controller.onLanguageChange = { languageChanges += 1 }
         controller.update(SystemStatus())
@@ -46,7 +46,8 @@ import AppKit
             check(languageChanges == index + 1, "choosing \(language) notifies the app once")
             check(controller.window?.title == L10n.settingsTitle, "\(language) retitles the window")
             let labels = texts(controller.window)
-            check(labels.contains(L10n.launchAtLogin) && labels.contains(L10n.bottomDotsNote), "\(language) rebuilds every label")
+            check(labels.contains(L10n.launchAtLogin) && labels.contains(L10n.bottomVolumeNote) && labels.contains(L10n.showVolumeMarks),
+                  "\(language) rebuilds every label")
             check(labels.filter { $0 == L10n.launchAtLogin }.count == 1, "\(language) rebuild leaves no duplicate controls")
             let content = controller.window!.contentView!
             let lowest = descendants(content).filter { !$0.isHidden && $0.frame.height > 0 }

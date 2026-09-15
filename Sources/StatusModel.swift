@@ -115,6 +115,22 @@ struct AudioState: Equatable {
         if let volume { return "\(volume)%" }
         return muted == false ? L10n.notMuted : L10n.noVolumeInfo
     }
+    /// Marks lit at the bottom of the icon, one per 25% of volume (0...4); nil when the level is unknown.
+    var volumeLevel: Int? {
+        guard let volume else { return nil }
+        return volume <= 0 ? 0 : min(4, (volume + 24) / 25)
+    }
+    /// The bottom of the icon shows one bar instead of the volume marks.
+    var showsMuteBar: Bool { muted == true }
+    /// SF Symbol shown briefly in the icon when headphones connect.
+    var headphoneSymbol: String {
+        let name = headphoneNames.joined(separator: " ").lowercased()
+        if name.contains("airpods max") { return "airpodsmax" }
+        if name.contains("airpods pro") { return "airpodspro" }
+        if name.contains("airpods") { return "airpods" }
+        if name.contains("beats") { return "beats.headphones" }
+        return "headphones"
+    }
 }
 
 enum StatusGlyph: String, CaseIterable {

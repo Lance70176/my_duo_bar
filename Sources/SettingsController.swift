@@ -5,20 +5,20 @@ import Intents
 
 final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private static let contentWidth: CGFloat = 496
-    private let preferences: DotPreferences
-    private let dotRows = NSStackView()
+    private let preferences: IconPreferences
+    private let volumeCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let login = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let languagePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let focusStatus = NSTextField(wrappingLabelWithString: "")
     private let location = CLLocationManager()
     private let icon = LargeIconView()
-    private let dotsGuide = NSTextField(wrappingLabelWithString: "")
+    private let volumeGuide = NSTextField(wrappingLabelWithString: "")
     private var stack: NSStackView?
     var onRefresh: (() -> Void)?
     /// Called after the user picks another language, once the preference has been saved.
     var onLanguageChange: (() -> Void)?
 
-    init(preferences: DotPreferences) {
+    init(preferences: IconPreferences) {
         self.preferences = preferences
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: Self.contentWidth, height: 600),
                               styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
@@ -26,6 +26,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         super.init(window: window)
         location.delegate = self
         login.target = self; login.action = #selector(toggleLogin)
+        volumeCheck.target = self; volumeCheck.action = #selector(toggleVolume)
         languagePopup.target = self; languagePopup.action = #selector(changeLanguage(_:))
         languagePopup.controlSize = .small
         build()
@@ -80,12 +81,12 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         stack.addArrangedSubview(note(L10n.menuBarOnlyNote))
         stack.addArrangedSubview(note(L10n.positionNote))
         addSeparator(stack)
-        stack.addArrangedSubview(heading(L10n.bottomDots))
-        stack.addArrangedSubview(note(L10n.bottomDotsNote))
-        dotRows.orientation = .vertical; dotRows.alignment = .leading; dotRows.spacing = 4
-        stack.addArrangedSubview(dotRows)
-        dotRows.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        rebuildDotRows()
+        stack.addArrangedSubview(heading(L10n.bottomVolume))
+        stack.addArrangedSubview(note(L10n.bottomVolumeNote))
+        volumeCheck.title = L10n.showVolumeMarks
+        volumeCheck.state = preferences.showVolume ? .on : .off
+        stack.addArrangedSubview(volumeCheck)
+        icon.showVolume = preferences.showVolume
         addSeparator(stack)
         stack.addArrangedSubview(heading(L10n.tidyMenuBar))
         stack.addArrangedSubview(note(L10n.tidyMenuBarNote))
@@ -114,15 +115,15 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         stack.addArrangedSubview(heading(L10n.iconGuide))
         let ink = NSColor.labelColor
         let green = NSColor(calibratedRed: 0.18, green: 0.80, blue: 0.38, alpha: 1)
-        dotsGuide.font = .systemFont(ofSize: 11); dotsGuide.textColor = .secondaryLabelColor
-        dotsGuide.preferredMaxLayoutWidth = Self.contentWidth - 52 - 30
+        volumeGuide.font = .systemFont(ofSize: 11); volumeGuide.textColor = .secondaryLabelColor
+        volumeGuide.preferredMaxLayoutWidth = Self.contentWidth - 52 - 30
         let rows: [(NSImage, NSTextField)] = [
             (Self.guideImage { Self.drawRing(ink, fraction: 0.7) }, guideLabel(L10n.guideRing)),
             (Self.guideImage { Self.drawRing(green, fraction: 1) }, guideLabel(L10n.guideRingGreen)),
             (Self.guideImage { Self.drawRing(.systemYellow, fraction: 1) }, guideLabel(L10n.guideRingYellow)),
             (NSImage(systemSymbolName: "wifi", accessibilityDescription: nil)!
                 .withSymbolConfiguration(.init(pointSize: 12, weight: .semibold))!, guideLabel(L10n.guideCenter)),
-            (Self.guideImage { Self.drawDots(ink) }, dotsGuide)
+            (Self.guideImage { Self.drawVolumeMarks(ink) }, volumeGuide)
         ]
         for (image, label) in rows {
             let picture = NSImageView(image: image)
@@ -143,10 +144,10 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         return label
     }
 
-    /// Dot order and visibility change at runtime, so this line and the icon tooltip follow the preferences.
+    /// The volume marks can be hidden at runtime, so this line and the icon tooltip follow the preference.
     private func updateIconGuide() {
-        dotsGuide.stringValue = L10n.guideDots(preferences.layout.visible.map(\.title))
-        icon.toolTip = [L10n.guideRing, L10n.guideRingGreen, L10n.guideRingYellow, L10n.guideCenter, dotsGuide.stringValue]
+        volumeGuide.stringValue = preferences.showVolume ? L10n.guideVolume : L10n.guideVolumeHidden
+        icon.toolTip = [L10n.guideRing, L10n.guideRingGreen, L10n.guideRingYellow, L10n.guideCenter, volumeGuide.stringValue]
             .joined(separator: "\n")
     }
 
@@ -164,8 +165,9 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         arc.appendArc(withCenter: center, radius: 6.5, startAngle: 210, endAngle: 210 - 240 * fraction, clockwise: true)
         arc.stroke()
     }
-    private static func drawDots(_ color: NSColor) {
-        for (index, alpha) in [1.0, 0.5, 0.5, 1.0].enumerated() {
+    /// Three of four marks lit, as the icon shows a volume between 50% and 75%.
+    private static func drawVolumeMarks(_ color: NSColor) {
+        for (index, alpha) in [1.0, 1.0, 1.0, 0.5].enumerated() {
             color.withAlphaComponent(alpha).setFill()
             NSBezierPath(ovalIn: NSRect(x: 2 + CGFloat(index) * 5, y: 5.5, width: 4, height: 4)).fill()
         }
@@ -184,48 +186,10 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         window.setFrame(frame, display: true)
     }
 
-    private func rebuildDotRows() {
-        for row in dotRows.arrangedSubviews { dotRows.removeArrangedSubview(row); row.removeFromSuperview() }
-        for (index, glyph) in preferences.layout.order.enumerated() {
-            let check = NSButton(checkboxWithTitle: glyph.title, target: self, action: #selector(toggleDot(_:)))
-            check.identifier = NSUserInterfaceItemIdentifier(glyph.rawValue)
-            check.state = preferences.layout.hidden.contains(glyph) ? .off : .on
-            check.setAccessibilityLabel(L10n.showDot(glyph.title))
-            let image = NSImageView(image: NSImage(systemSymbolName: glyph.symbol, accessibilityDescription: nil) ?? NSImage())
-            image.contentTintColor = .secondaryLabelColor
-            image.widthAnchor.constraint(equalToConstant: 22).isActive = true
-            let spacer = NSView()
-            let up = NSButton(image: NSImage(systemSymbolName: "chevron.up", accessibilityDescription: nil)!, target: self, action: #selector(moveDotUp(_:)))
-            let down = NSButton(image: NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)!, target: self, action: #selector(moveDotDown(_:)))
-            for b in [up, down] {
-                b.bezelStyle = .rounded; b.controlSize = .small
-                b.identifier = NSUserInterfaceItemIdentifier(glyph.rawValue)
-                b.widthAnchor.constraint(equalToConstant: 30).isActive = true
-            }
-            up.isEnabled = index > 0; down.isEnabled = index < preferences.layout.order.count - 1
-            up.setAccessibilityLabel(L10n.moveEarlier(glyph.title)); down.setAccessibilityLabel(L10n.moveLater(glyph.title))
-            up.toolTip = L10n.moveLeft; down.toolTip = L10n.moveRight
-            let row = NSStackView(views: [image, check, spacer, up, down])
-            row.spacing = 8; row.alignment = .centerY
-            row.heightAnchor.constraint(equalToConstant: 28).isActive = true
-            dotRows.addArrangedSubview(row)
-            row.widthAnchor.constraint(equalTo: dotRows.widthAnchor).isActive = true
-        }
-        icon.layout = preferences.layout
+    @objc private func toggleVolume() {
+        preferences.setShowVolume(volumeCheck.state == .on)
+        icon.showVolume = preferences.showVolume
         updateIconGuide()
-    }
-    @objc private func toggleDot(_ sender: NSButton) {
-        guard let value = sender.identifier?.rawValue, let glyph = StatusGlyph(rawValue: value) else { return }
-        preferences.setVisible(sender.state == .on, for: glyph)
-        icon.layout = preferences.layout
-        updateIconGuide()
-    }
-    @objc private func moveDotUp(_ sender: NSButton) { moveDot(sender, by: -1) }
-    @objc private func moveDotDown(_ sender: NSButton) { moveDot(sender, by: 1) }
-    private func moveDot(_ sender: NSButton, by offset: Int) {
-        guard let value = sender.identifier?.rawValue, let glyph = StatusGlyph(rawValue: value) else { return }
-        preferences.move(glyph, by: offset)
-        rebuildDotRows()
     }
 
     @objc private func changeLanguage(_ sender: NSPopUpButton) {
@@ -262,7 +226,8 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
 
     func update(_ status: SystemStatus) {
         icon.status = status
-        icon.layout = preferences.layout
+        icon.showVolume = preferences.showVolume
+        volumeCheck.state = preferences.showVolume ? .on : .off
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         switch status.focus {
         case .unavailable: focusStatus.stringValue = L10n.focusPrompt

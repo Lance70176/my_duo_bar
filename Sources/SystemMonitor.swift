@@ -74,6 +74,7 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         let system = AudioObjectID(kAudioObjectSystemObject)
         listen(system, SystemReaders.address(kAudioHardwarePropertyDevices))
         listen(system, SystemReaders.address(kAudioHardwarePropertyDefaultOutputDevice))
+        listen(system, SystemReaders.address(kAudioHardwarePropertyDefaultInputDevice))
         bindOutput()
         observe(NotificationCenter.default, .NSProcessInfoPowerStateDidChange) { $0.refresh() }
         let workspace = NSWorkspace.shared.notificationCenter
