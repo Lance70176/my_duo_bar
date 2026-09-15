@@ -86,6 +86,7 @@ import CoreAudio
         vpnChecks()
         soundChecks()
         outputChecks()
+        inputChecks()
         bluetoothChecks()
         L10n.overrideForTesting(nil)
         check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "the Bluetooth submenu targets Bluetooth settings")
@@ -293,6 +294,7 @@ extension PanelTests {
         let sound = SoundMenuController()
         sound.service = FakeSoundService(SoundOutput(name: "MacBook Pro 喇叭", volume: 0.5, muted: false, canSetVolume: true, canSetMute: true))
         sound.outputService = fake
+        sound.inputService = FakeInputDeviceService([])
         var opened: [SystemSettings.Page] = []
         var changes = 0
         sound.onOpenSettings = { opened.append($0) }
@@ -302,7 +304,7 @@ extension PanelTests {
         sound.menuWillOpen(sound.submenu)
         spin(0.2)
         let items = { sound.submenu.items }
-        let rows = { items().filter { $0.representedObject is NSNumber } }
+        let rows = { items().filter { $0.representedObject is NSNumber && $0.tag == 7 } }
         let header = items().firstIndex { $0.isSectionHeader && $0.title == "輸出裝置" }
         check(header != nil && items()[1].view === sound.volumeRow && items()[2].view === sound.muteRow
               && items()[header! - 1].isSeparatorItem && items().last?.title == "聲音設定…",
@@ -339,6 +341,66 @@ extension PanelTests {
               && AudioOutputDevice.symbol(name: "LG HDR 4K", transport: kAudioDeviceTransportTypeHDMI, headphone: false) == "tv"
               && AudioOutputDevice.symbol(name: "Sony WH-1000XM5", transport: kAudioDeviceTransportTypeBluetooth, headphone: true) == "headphones",
               "device icons follow the device kind")
+    }
+
+    /// Exercises the input device list in the Sound submenu against fake devices: the real default input is never changed.
+    static func inputChecks() {
+        let builtIn = AudioInputDevice(id: 11, name: "MacBook Pro 麥克風", symbol: "mic.fill", isDefault: true)
+        let airpods = AudioInputDevice(id: 12, name: "AirPods Pro", symbol: "airpodspro", isDefault: false)
+        let speakers = AudioOutputDevice(id: 1, name: "MacBook Pro 喇叭", symbol: "speaker.wave.2.fill", isHeadphone: false, isDefault: true)
+        let fake = FakeInputDeviceService([builtIn, airpods])
+        let sound = SoundMenuController()
+        sound.service = FakeSoundService(SoundOutput(name: "MacBook Pro 喇叭", volume: 0.5, muted: false, canSetVolume: true, canSetMute: true))
+        sound.outputService = FakeOutputDeviceService([speakers])
+        sound.inputService = fake
+        var opened: [SystemSettings.Page] = []
+        var changes = 0
+        sound.onOpenSettings = { opened.append($0) }
+        sound.onOutputChanged = { changes += 1 }
+        sound.update(status: SystemStatus())
+
+        sound.menuWillOpen(sound.submenu)
+        spin(0.2)
+        let items = { sound.submenu.items }
+        let outputHeader = items().firstIndex { $0.isSectionHeader && $0.title == "輸出裝置" }
+        let header = items().firstIndex { $0.isSectionHeader && $0.title == "輸入裝置" }
+        let rows = { items().filter { $0.representedObject is NSNumber && $0.tag == 8 } }
+        check(outputHeader != nil && header != nil && header! > outputHeader! && items()[header! - 1].isSeparatorItem
+              && items().last?.title == "聲音設定…" && items()[items().count - 2].isSeparatorItem,
+              "the Sound submenu lists input devices under their own header, after the output devices and before Sound Settings")
+        check(rows().map(\.title) == ["MacBook Pro 麥克風", "AirPods Pro"] && rows().map(\.state) == [.on, .off] && rows().allSatisfy { $0.image != nil }
+              && items().firstIndex(of: rows()[0]) == header! + 1,
+              "every input device is listed with an icon right after the header, with the current one checked")
+        check(items()[outputHeader! + 1].title == "MacBook Pro 喇叭" && items()[outputHeader! + 2].isSeparatorItem,
+              "output rows stay in their own section")
+
+        rows()[1].target.map { _ = ($0 as? NSObject)?.perform(rows()[1].action, with: rows()[1]) }
+        spin(0.2)
+        check(fake.selections == [12] && rows().map(\.state) == [.off, .on] && changes == 0 && opened.isEmpty,
+              "choosing a device makes it the default input without touching the output")
+        check(items()[1].view === sound.volumeRow && items()[2].view === sound.muteRow
+              && items()[outputHeader! + 1].title == "MacBook Pro 喇叭", "replacing input rows keeps the slider, mute row and output rows")
+        sound.selectInput(id: 12)
+        spin(0.1)
+        check(fake.selections == [12], "choosing the current input does nothing")
+
+        fake.refuse = true
+        sound.selectInput(id: 11)
+        spin(0.2)
+        check(opened == [.sound] && rows().map(\.state) == [.off, .on], "a refused input switch opens Sound settings and keeps the check")
+
+        fake.replace([])
+        sound.reloadInputs()
+        spin(0.2)
+        check(rows().isEmpty && items()[header! + 1].title == "沒有可用的輸入裝置" && !items()[header! + 1].isEnabled,
+              "no inputs shows a note in place of the rows")
+        sound.menuDidClose(sound.submenu)
+
+        check(AudioInputDevice.symbol(name: "AirPods Pro", transport: kAudioDeviceTransportTypeBluetooth) == "airpodspro"
+              && AudioInputDevice.symbol(name: "MacBook Pro 麥克風", transport: kAudioDeviceTransportTypeBuiltIn) == "mic.fill"
+              && AudioInputDevice.symbol(name: "Sony WH-1000XM5", transport: kAudioDeviceTransportTypeBluetooth) == "headphones"
+              && AudioInputDevice.symbol(name: "BlackHole 2ch", transport: kAudioDeviceTransportTypeVirtual) == "waveform",
+              "input icons follow the device kind")
     }
 
     /// Exercises the Bluetooth submenu against fake devices: nothing real is connected or disconnected.
@@ -504,6 +566,29 @@ final class FakeOutputDeviceService: OutputDeviceServing, @unchecked Sendable {
 
     func outputDevices() -> [AudioOutputDevice] { lock.withLock { _devices } }
     func selectOutput(id: UInt32) -> Bool {
+        lock.withLock {
+            guard !_refuse else { return false }
+            _selections.append(id)
+            for index in _devices.indices { _devices[index].isDefault = _devices[index].id == id }
+            return true
+        }
+    }
+}
+
+/// In-memory input devices for tests.
+final class FakeInputDeviceService: InputDeviceServing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _devices: [AudioInputDevice]
+    private var _selections: [UInt32] = []
+    private var _refuse = false
+    init(_ devices: [AudioInputDevice]) { _devices = devices }
+
+    var selections: [UInt32] { lock.withLock { _selections } }
+    var refuse: Bool { get { lock.withLock { _refuse } } set { lock.withLock { _refuse = newValue } } }
+    func replace(_ devices: [AudioInputDevice]) { lock.withLock { _devices = devices } }
+
+    func inputDevices() -> [AudioInputDevice] { lock.withLock { _devices } }
+    func selectInput(id: UInt32) -> Bool {
         lock.withLock {
             guard !_refuse else { return false }
             _selections.append(id)

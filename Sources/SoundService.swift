@@ -127,3 +127,60 @@ extension SoundService {
         return set(AudioObjectID(kAudioObjectSystemObject), address, AudioDeviceID(id))
     }
 }
+
+/// An input device the Sound submenu can switch to.
+struct AudioInputDevice: Equatable, Sendable {
+    var id: UInt32
+    var name: String
+    var symbol: String
+    var isDefault: Bool
+
+    /// SF Symbol for an input, from its name and how it is connected.
+    static func symbol(name: String, transport: UInt32?) -> String {
+        let lower = name.lowercased()
+        if lower.contains("airpods max") { return "airpodsmax" }
+        if lower.contains("airpods pro") { return "airpodspro" }
+        if lower.contains("airpods") { return "airpods" }
+        if lower.contains("beats") { return "beats.headphones" }
+        switch transport {
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: return "headphones"
+        case kAudioDeviceTransportTypeVirtual, kAudioDeviceTransportTypeAggregate: return "waveform"
+        default: return "mic.fill"
+        }
+    }
+}
+
+extension SoundService {
+    private static func defaultInput() -> AudioDeviceID? {
+        let device: AudioDeviceID? = SystemReaders.value(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultInputDevice)
+        guard let device, device != kAudioObjectUnknown else { return nil }
+        return device
+    }
+
+    /// Devices that can record sound and be chosen as the default input, as the system Sound menu lists them.
+    static func inputDevices() -> [AudioInputDevice] {
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        let devices: [AudioDeviceID] = SystemReaders.values(system, kAudioHardwarePropertyDevices)
+        let current = defaultInput()
+        return devices.compactMap { device -> AudioInputDevice? in
+            let alive: UInt32 = SystemReaders.value(device, kAudioDevicePropertyDeviceIsAlive) ?? 0
+            let hidden: UInt32 = SystemReaders.value(device, kAudioDevicePropertyIsHidden) ?? 0
+            let canBeDefault: UInt32 = SystemReaders.value(device, kAudioDevicePropertyDeviceCanBeDefaultDevice,
+                                                           scope: kAudioDevicePropertyScopeInput) ?? 0
+            let streams: [AudioStreamID] = SystemReaders.values(device, kAudioDevicePropertyStreams, scope: kAudioDevicePropertyScopeInput)
+            guard alive != 0, hidden == 0, canBeDefault != 0, !streams.isEmpty,
+                  let name = SystemReaders.string(device, kAudioObjectPropertyName) else { return nil }
+            let transport: UInt32? = SystemReaders.value(device, kAudioDevicePropertyTransportType)
+            return AudioInputDevice(id: device, name: name, symbol: AudioInputDevice.symbol(name: name, transport: transport),
+                                    isDefault: device == current)
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Makes a device the default input, like choosing it in the system Sound menu.
+    @discardableResult
+    static func selectInput(id: UInt32) -> Bool {
+        let address = SystemReaders.address(kAudioHardwarePropertyDefaultInputDevice)
+        return set(AudioObjectID(kAudioObjectSystemObject), address, AudioDeviceID(id))
+    }
+}

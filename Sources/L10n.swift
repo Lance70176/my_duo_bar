@@ -192,6 +192,8 @@ enum L10n {
 
     static var outputDevices: String { pick("輸出裝置", "Output", "出力装置") }
     static var noOutputDevices: String { pick("沒有可用的輸出裝置", "No Output Devices", "出力装置がありません") }
+    static var inputDevices: String { pick("輸入裝置", "Input", "入力装置") }
+    static var noInputDevices: String { pick("沒有可用的輸入裝置", "No Input Devices", "入力装置がありません") }
 
     // MARK: Bluetooth submenu
     static var bluetooth: String { pick("藍牙", "Bluetooth", "Bluetooth") }
