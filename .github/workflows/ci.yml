@@ -4,6 +4,9 @@ on:
   pull_request:
 permissions:
   contents: read
+env:
+  # Hosted runners may not ship the macOS 27 SDK yet; local builds still require 27.
+  DUOBAR_MIN_SDK_MAJOR: "26"
 jobs:
   verify:
     runs-on: macos-latest
@@ -15,5 +18,4 @@ jobs:
         run: ./scripts/build.sh
       - name: Verify universal binary and signature
         run: |
-          lipo build/MyDuoBar.app/Contents/MacOS/MyDuoBar -verify_arch arm64 x86_64
-          codesign --verify --deep --strict build/MyDuoBar.app
+          ./scripts/verify-app.sh build/MyDuoBar.app

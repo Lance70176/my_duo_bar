@@ -1,7 +1,7 @@
 import Foundation
 
 @main
-struct StatusTests {
+@MainActor struct StatusTests {
     static var checks = 0
     static func check(_ value: @autoclosure () -> Bool, _ description: String) {
         checks += 1
@@ -91,10 +91,10 @@ struct StatusTests {
         var routed = SystemStatus(); routed.vpn.routedTunnel = true
         check(routed.glyphs == [.vpn], "route-confirmed VPN activates its dot")
         let wifi = WiFiState(available: true, powered: true, associated: true, ssid: nil, rssi: -55, route: .wifi)
-        check(wifi.signalQuality == "信号很好", "Wi-Fi signal uses plain language")
-        check(wifi.title == "已连接 Wi-Fi", "redacted SSID is still connected")
-        check(WiFiState(available: true, powered: false, route: .ethernet).title == "以太网已连接", "Ethernet is not shown as offline")
-        check(BatteryState().percent == nil && BatteryState().title == "外接电源", "desktop Mac never fabricates 100 percent")
+        check(wifi.signalQuality == "訊號很好", "Wi-Fi signal uses plain language")
+        check(wifi.title == "已連線 Wi-Fi", "redacted SSID is still connected")
+        check(WiFiState(available: true, powered: false, route: .ethernet).title == "乙太網路已連線", "Ethernet is not shown as offline")
+        check(BatteryState().percent == nil && BatteryState().title == "外接電源", "desktop Mac never fabricates 100 percent")
         check(AudioState().muted == nil, "unsupported mute state is not fabricated")
         print("PASS: \(checks) state combinations and unavailable-data checks")
     }

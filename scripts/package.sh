@@ -11,7 +11,7 @@ trap 'rm -rf "$DUOBAR_STAGE"' EXIT
 mkdir -p "$DUOBAR_ROOT/dist"
 /usr/bin/ditto --norsrc --noextattr --noacl "$DUOBAR_APP" "$DUOBAR_STAGE/MyDuoBar.app"
 ln -s /Applications "$DUOBAR_STAGE/Applications"
-cp -X "$DUOBAR_ROOT/docs/安装说明.txt" "$DUOBAR_STAGE/安装说明.txt"
+cp -X "$DUOBAR_ROOT/docs/安裝說明.txt" "$DUOBAR_STAGE/安裝說明.txt"
 /usr/bin/ditto -c -k --norsrc --noextattr --noacl --keepParent "$DUOBAR_APP" "$DUOBAR_ROOT/dist/$DUOBAR_NAME.zip"
 /usr/bin/hdiutil create -volname "MyDuoBar $DUOBAR_VERSION" -srcfolder "$DUOBAR_STAGE" -ov -format UDZO "$DUOBAR_ROOT/dist/$DUOBAR_NAME.dmg"
 /usr/bin/hdiutil verify "$DUOBAR_ROOT/dist/$DUOBAR_NAME.dmg"

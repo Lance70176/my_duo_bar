@@ -6,6 +6,9 @@ import IOKit.ps
 import Network
 import SystemConfiguration
 
+/// Owns every system subscription. All mutable state lives on the main actor; the worker queue only
+/// performs blocking reads and hands back value types.
+@MainActor
 final class SystemMonitor: NSObject, CWEventDelegate {
     var onChange: ((SystemStatus) -> Void)?
     private(set) var status = SystemStatus()
@@ -17,7 +20,7 @@ final class SystemMonitor: NSObject, CWEventDelegate {
     private var focusTimer: Timer?
     private var powerSource: CFRunLoopSource?
     private var dynamicStore: SCDynamicStore?
-    private var observers: [NSObjectProtocol] = []
+    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var audioListeners: [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
     private var focusObservation: NSKeyValueObservation?
     private var watchedOutput: AudioDeviceID?
@@ -32,26 +35,33 @@ final class SystemMonitor: NSObject, CWEventDelegate {
             try? wifi.startMonitoringEvent(with: event)
         }
         path.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
+            let link: NetworkLink
+            if path.status != .satisfied { link = .offline }
+            else if path.usesInterfaceType(.wifi) { link = .wifi }
+            else if path.usesInterfaceType(.wiredEthernet) { link = .ethernet }
+            else { link = .other }
+            Task { @MainActor in
                 guard let self else { return }
-                if path.status != .satisfied { self.route = .offline }
-                else if path.usesInterfaceType(.wifi) { self.route = .wifi }
-                else if path.usesInterfaceType(.wiredEthernet) { self.route = .ethernet }
-                else { self.route = .other }
+                self.route = link
                 self.refresh()
             }
         }
         path.start(queue: worker)
+        // IOKit and SystemConfiguration invoke these C callbacks on the main run loop / main queue.
         powerSource = IOPSNotificationCreateRunLoopSource({ context in
             guard let context else { return }
-            Unmanaged<SystemMonitor>.fromOpaque(context).takeUnretainedValue().refresh()
+            MainActor.assumeIsolated {
+                Unmanaged<SystemMonitor>.fromOpaque(context).takeUnretainedValue().refresh()
+            }
         }, Unmanaged.passUnretained(self).toOpaque())?.takeRetainedValue()
         if let powerSource { CFRunLoopAddSource(CFRunLoopGetMain(), powerSource, .commonModes) }
         var context = SCDynamicStoreContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
                                             retain: nil, release: nil, copyDescription: nil)
         dynamicStore = SCDynamicStoreCreate(nil, "MyDuoBar" as CFString, { _, _, context in
             guard let context else { return }
-            Unmanaged<SystemMonitor>.fromOpaque(context).takeUnretainedValue().refresh()
+            MainActor.assumeIsolated {
+                Unmanaged<SystemMonitor>.fromOpaque(context).takeUnretainedValue().refresh()
+            }
         }, &context)
         if let dynamicStore {
             let patterns = ["State:/Network/Global/.*", "State:/Network/Service/.*/.*", "State:/Network/Interface/.*/.*"] as CFArray
@@ -62,20 +72,29 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         listen(system, SystemReaders.address(kAudioHardwarePropertyDevices))
         listen(system, SystemReaders.address(kAudioHardwarePropertyDefaultOutputDevice))
         bindOutput()
-        observers.append(NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange,
-            object: nil, queue: .main) { [weak self] _ in self?.refresh() })
-        let nc = NSWorkspace.shared.notificationCenter
-        observers.append(nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.sleeping = true; self?.timer?.invalidate(); self?.focusTimer?.invalidate()
-        })
-        observers.append(nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.sleeping = false; self?.resetTimer(); self?.refresh()
-        })
+        observe(NotificationCenter.default, .NSProcessInfoPowerStateDidChange) { $0.refresh() }
+        let workspace = NSWorkspace.shared.notificationCenter
+        observe(workspace, NSWorkspace.willSleepNotification) { monitor in
+            monitor.sleeping = true; monitor.timer?.invalidate(); monitor.focusTimer?.invalidate()
+        }
+        observe(workspace, NSWorkspace.didWakeNotification) { monitor in
+            monitor.sleeping = false; monitor.resetTimer(); monitor.refresh()
+        }
         focusObservation = INFocusStatusCenter.default.observe(\.focusStatus, options: [.new]) { [weak self] _, _ in
-            self?.refreshFocus()
+            Task { @MainActor in self?.refreshFocus() }
         }
         resetTimer()
         refresh()
+    }
+
+    private func observe(_ center: NotificationCenter, _ name: Notification.Name, _ action: @escaping @MainActor (SystemMonitor) -> Void) {
+        let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                action(self)
+            }
+        }
+        observers.append((center, token))
     }
 
     func setMenuOpen(_ open: Bool) {
@@ -89,23 +108,26 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         focusTimer?.invalidate()
         guard !sleeping else { return }
         let interval: TimeInterval = menuOpen ? 3 : 30
-        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.refresh() }
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
         timer.tolerance = menuOpen ? 0.5 : 8
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
         // Supplement Focus notifications without re-reading audio and networking.
-        let focusTimer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in self?.refreshFocus() }
+        let focusTimer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshFocus() }
+        }
         focusTimer.tolerance = 0.25
         RunLoop.main.add(focusTimer, forMode: .common)
         self.focusTimer = focusTimer
     }
 
     private func refreshFocus() {
-        guard Thread.isMainThread else { DispatchQueue.main.async { self.refreshFocus() }; return }
         guard !sleeping else { return }
         worker.async { [weak self] in
             let focus = SystemReaders.focus()
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self, !self.sleeping, self.status.focus != focus else { return }
                 self.status.focus = focus
                 self.onChange?(self.status)
@@ -114,35 +136,40 @@ final class SystemMonitor: NSObject, CWEventDelegate {
     }
 
     func refresh() {
-        guard Thread.isMainThread else { DispatchQueue.main.async { self.refresh() }; return }
         guard !sleeping else { return }
         if sampling { needsAnotherSample = true; return }
         sampling = true
         let route = self.route
         worker.async { [weak self] in
-            guard let self else { return }
+            // Blocking reads only; the Wi-Fi client is a process-wide singleton, so nothing crosses actors.
             var value = SystemStatus()
             value.battery = SystemReaders.battery()
-            value.wifi = SystemReaders.wifi(client: self.wifi, route: route)
+            value.wifi = SystemReaders.wifi(client: CWWiFiClient.shared(), route: route)
             value.vpn = SystemReaders.vpn()
             value.audio = SystemReaders.audio()
             value.focus = SystemReaders.focus()
-            DispatchQueue.main.async {
-                self.sampling = false
-                self.bindOutput()
-                if value != self.status {
-                    self.status = value
-                    self.onChange?(value)
-                }
-                if self.needsAnotherSample { self.needsAnotherSample = false; self.refresh() }
-            }
+            let sample = value
+            Task { @MainActor in self?.finishSample(sample) }
         }
+    }
+
+    private func finishSample(_ value: SystemStatus) {
+        sampling = false
+        bindOutput()
+        if value != status {
+            status = value
+            onChange?(value)
+        }
+        if needsAnotherSample { needsAnotherSample = false; refresh() }
     }
 
     private func listen(_ object: AudioObjectID, _ address: AudioObjectPropertyAddress) {
         var address = address
         guard AudioObjectHasProperty(object, &address) else { return }
-        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.refresh() }
+        // Listener blocks are dispatched on the main queue.
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
         if AudioObjectAddPropertyListenerBlock(object, &address, .main, block) == noErr {
             audioListeners.append((object, address, block))
         }
@@ -166,10 +193,13 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         }
     }
 
-    func powerStateDidChangeForWiFiInterface(withName name: String) { refresh() }
-    func ssidDidChangeForWiFiInterface(withName name: String) { refresh() }
-    func linkDidChangeForWiFiInterface(withName name: String) { refresh() }
-    func linkQualityDidChangeForWiFiInterface(withName name: String, rssi: Int, transmitRate: Double) { refresh() }
+    // CoreWLAN calls its delegate on a private queue.
+    nonisolated func powerStateDidChangeForWiFiInterface(withName name: String) { Task { @MainActor in self.refresh() } }
+    nonisolated func ssidDidChangeForWiFiInterface(withName name: String) { Task { @MainActor in self.refresh() } }
+    nonisolated func linkDidChangeForWiFiInterface(withName name: String) { Task { @MainActor in self.refresh() } }
+    nonisolated func linkQualityDidChangeForWiFiInterface(withName name: String, rssi: Int, transmitRate: Double) {
+        Task { @MainActor in self.refresh() }
+    }
 
     func stop() {
         timer?.invalidate()
@@ -182,11 +212,9 @@ final class SystemMonitor: NSObject, CWEventDelegate {
             var address = original
             AudioObjectRemovePropertyListenerBlock(object, &address, .main, block)
         }
+        audioListeners.removeAll()
         focusObservation?.invalidate()
-        observers.forEach {
-            NotificationCenter.default.removeObserver($0)
-            NSWorkspace.shared.notificationCenter.removeObserver($0)
-            DistributedNotificationCenter.default().removeObserver($0)
-        }
+        for (center, token) in observers { center.removeObserver(token) }
+        observers.removeAll()
     }
 }

@@ -2,6 +2,7 @@ import AppKit
 import ServiceManagement
 import Intents
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var item: NSStatusItem!
     private let menu = NSMenu()
@@ -32,11 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         let content = NSMenuItem(); content.view = panel; menu.addItem(content)
         menu.addItem(.separator())
-        let systemIcons = NSMenuItem(title: "关闭对应状态栏", action: #selector(openSystemIcons), keyEquivalent: "")
+        let systemIcons = NSMenuItem(title: "關閉對應選單列圖示", action: #selector(openSystemIcons), keyEquivalent: "")
         systemIcons.target = self; menu.addItem(systemIcons)
-        let settingsItem = NSMenuItem(title: "设置…", action: #selector(showSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: "設定…", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self; menu.addItem(settingsItem)
-        let quit = NSMenuItem(title: "退出 MyDuoBar", action: #selector(quitApp), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "結束 MyDuoBar", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self; menu.addItem(quit)
         item.menu = menu
         monitor.onChange = { [weak self] state in
@@ -54,8 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showSettings() }
         }
         if CommandLine.arguments.contains("--request-focus") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                INFocusStatusCenter.default.requestAuthorization { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                INFocusStatusCenter.default.requestAuthorization { _ in
                     DispatchQueue.main.async { self?.monitor.refresh() }
                 }
             }

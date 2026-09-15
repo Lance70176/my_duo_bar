@@ -1,6 +1,6 @@
 import AppKit
 
-@main struct PanelTests {
+@main @MainActor struct PanelTests {
     static func check(_ value: Bool, _ message: String) {
         guard value else { fputs("FAIL: \(message)\n", stderr); exit(1) }
     }

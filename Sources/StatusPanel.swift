@@ -98,7 +98,7 @@ final class StatusRow: NSButton {
         setAccessibilityElement(true)
         setAccessibilityRole(isEnabled ? .button : .staticText)
         setAccessibilityLabel(toolTip)
-        setAccessibilityHelp(isEnabled ? "打开" + destination.title : nil)
+        setAccessibilityHelp(isEnabled ? "開啟" + destination.title : nil)
         [symbol, titleField, detailField, valueField, chevron].forEach { $0.setAccessibilityElement(false) }
     }
 }
@@ -151,21 +151,21 @@ final class StatusPanel: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(_ state: SystemStatus, preview: Bool = false) {
-        mode.stringValue = preview ? "样例状态" : "此 Mac"
+        mode.stringValue = preview ? "範例狀態" : "此 Mac"
         wifi.destination = state.wifi.route == .ethernet && !state.wifi.associated ? .network : .wifi
-        wifi.update(symbol: state.wifi.symbol, title: state.wifi.route == .ethernet && !state.wifi.associated ? "以太网" : "Wi-Fi",
+        wifi.update(symbol: state.wifi.symbol, title: state.wifi.route == .ethernet && !state.wifi.associated ? "乙太網路" : "Wi-Fi",
                     detail: state.wifi.title, value: state.wifi.associated ? state.wifi.signalQuality : "", active: state.wifi.associated || state.wifi.route == .ethernet)
         wifi.toolTip = state.wifi.detail
         let batterySymbol = state.battery.charging ? "battery.100percent.bolt" : "battery.75percent"
         battery.update(symbol: state.battery.present ? batterySymbol : "powerplug",
-                       title: "电池", detail: state.battery.detail, value: state.battery.title)
+                       title: "電池", detail: state.battery.detail, value: state.battery.title)
         vpn.update(symbol: "key.horizontal", title: "VPN", value: state.vpn.title, active: state.vpn.active)
-        vpn.toolTip = state.vpn.hasUnidentifiedTunnel ? "检测到网络隧道，但 macOS 未提供可确认的 VPN 名称；不会据此点亮 VPN 图标。" : state.vpn.title
-        headphones.update(symbol: "headphones", title: "耳机", value: state.audio.headphoneTitle, active: state.audio.headphoneActive)
+        vpn.toolTip = state.vpn.hasUnidentifiedTunnel ? "偵測到網路通道，但 macOS 未提供可確認的 VPN 名稱，因此不會點亮 VPN 圖示。" : state.vpn.title
+        headphones.update(symbol: "headphones", title: "耳機", value: state.audio.headphoneTitle, active: state.audio.headphoneActive)
         sound.update(symbol: state.audio.muted == true ? "speaker.slash.fill" : "speaker.wave.2",
-                     title: "声音", value: state.audio.soundTitle)
+                     title: "聲音", value: state.audio.soundTitle)
         sound.toolTip = state.audio.outputName + " · " + state.audio.soundTitle
-        focus.update(symbol: state.focus.symbol, title: "专注", value: state.focus.title, active: state.focus.isActive)
+        focus.update(symbol: state.focus.symbol, title: "專注", value: state.focus.title, active: state.focus.isActive)
         if case .unavailable(let reason) = state.focus { focus.toolTip = reason }
     }
 }

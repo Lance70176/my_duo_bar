@@ -6,7 +6,7 @@ import Intents
 final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private let preferences: DotPreferences
     private let dotRows = NSStackView()
-    private let login = NSButton(checkboxWithTitle: "登录时自动启动", target: nil, action: nil)
+    private let login = NSButton(checkboxWithTitle: "登入時自動啟動", target: nil, action: nil)
     private let focusStatus = NSTextField(wrappingLabelWithString: "")
     private let location = CLLocationManager()
     private let icon = LargeIconView()
@@ -18,7 +18,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         self.preferences = preferences
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 496, height: 780),
                               styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "MyDuoBar 设置"
+        window.title = "MyDuoBar 設定"
         window.isReleasedWhenClosed = false
         super.init(window: window)
         location.delegate = self
@@ -42,7 +42,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.heightAnchor.constraint(equalToConstant: 48).isActive = true
         let name = NSTextField(labelWithString: "MyDuoBar")
         name.font = .systemFont(ofSize: 21, weight: .semibold)
-        let caption = NSTextField(labelWithString: "一个位置，读懂 Mac 的状态。")
+        let caption = NSTextField(labelWithString: "一個位置，讀懂 Mac 的狀態。")
         caption.font = .systemFont(ofSize: 12); caption.textColor = .secondaryLabelColor
         let names = NSStackView(views: [name, caption]); names.orientation = .vertical; names.alignment = .leading; names.spacing = 5
         let header = NSStackView(views: [icon, names]); header.spacing = 15
@@ -50,38 +50,38 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         addSeparator(stack)
         login.target = self; login.action = #selector(toggleLogin)
         stack.addArrangedSubview(login)
-        stack.addArrangedSubview(note("只在菜单栏显示。单击查看，点击外部或 Esc 收起。"))
-        stack.addArrangedSubview(note("位置：按住 ⌘ 拖到控制中心左侧。macOS 会记住你调整的位置。"))
+        stack.addArrangedSubview(note("只在選單列顯示。按一下即可查看，按一下其他地方或按 Esc 收起。"))
+        stack.addArrangedSubview(note("位置：按住 ⌘ 拖到控制中心左側。macOS 會記住你調整的位置。"))
         addSeparator(stack)
-        stack.addArrangedSubview(heading("底部圆点"))
-        stack.addArrangedSubview(note("从左到右排列。圆点大小一致，开启时点亮，未开启时置灰。取消勾选可隐藏这一项。"))
+        stack.addArrangedSubview(heading("底部圓點"))
+        stack.addArrangedSubview(note("從左到右排列。圓點大小一致，開啟時點亮，未開啟時變灰。取消勾選可隱藏這一項。"))
         dotRows.orientation = .vertical; dotRows.alignment = .leading; dotRows.spacing = 4
         stack.addArrangedSubview(dotRows)
         dotRows.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         rebuildDotRows()
         addSeparator(stack)
-        stack.addArrangedSubview(heading("整理系统菜单栏"))
-        stack.addArrangedSubview(note("在系统设置中关闭原生 Wi-Fi、电池的菜单栏显示，即可留出空间。"))
-        stack.addArrangedSubview(button("关闭对应状态栏", #selector(openMenuBar)))
+        stack.addArrangedSubview(heading("整理系統選單列"))
+        stack.addArrangedSubview(note("在系統設定中關閉原生 Wi-Fi、電池的選單列顯示，即可留出空間。"))
+        stack.addArrangedSubview(button("關閉對應選單列圖示", #selector(openMenuBar)))
         addSeparator(stack)
-        stack.addArrangedSubview(heading("状态读取"))
+        stack.addArrangedSubview(heading("狀態讀取"))
         focusStatus.font = .systemFont(ofSize: 12)
         focusStatus.textColor = .secondaryLabelColor
         stack.addArrangedSubview(focusStatus)
         let actions = NSStackView(views: [
-            button("允许读取专注状态…", #selector(explainFocus)),
-            button("允许显示 Wi-Fi 名称…", #selector(requestLocation))
+            button("允許讀取專注狀態…", #selector(explainFocus)),
+            button("允許顯示 Wi-Fi 名稱…", #selector(requestLocation))
         ])
         actions.spacing = 8
         stack.addArrangedSubview(actions)
-        stack.addArrangedSubview(note("Wi-Fi 名称需定位权限，应用不请求地理坐标。专注状态未共享时，圆点保持灰色，详情标注未共享。"))
+        stack.addArrangedSubview(note("顯示 Wi-Fi 名稱需要定位服務權限，App 不會取得地理座標。專注狀態未共享時，圓點保持灰色，詳細資訊會標示「狀態未共享」。"))
         addSeparator(stack)
-        stack.addArrangedSubview(heading("联系开发者 🌟"))
-        stack.addArrangedSubview(contactRow("小红书：", title: "一键前往", action: #selector(openXiaohongshu)))
+        stack.addArrangedSubview(heading("聯絡開發者 🌟"))
+        stack.addArrangedSubview(contactRow("小紅書：", title: "前往", action: #selector(openXiaohongshu)))
         stack.addArrangedSubview(contactRow("微信：", title: "nybbamboo", action: #selector(copyWeChat), feedback: wechatCopied))
-        stack.addArrangedSubview(contactRow("邮箱：", title: "nybbamboo@163.com", action: #selector(copyEmail), feedback: emailCopied))
+        stack.addArrangedSubview(contactRow("電子郵件：", title: "nybbamboo@163.com", action: #selector(copyEmail), feedback: emailCopied))
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        stack.addArrangedSubview(note("\(version) · 本地运行"))
+        stack.addArrangedSubview(note("\(version) · 本機執行"))
     }
 
     private func contactRow(_ label: String, title: String, action: Selector, feedback: NSTextField? = nil) -> NSStackView {
@@ -93,7 +93,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         if let feedback {
             feedback.font = .systemFont(ofSize: 11)
             feedback.textColor = .systemGreen
-            feedback.setAccessibilityLabel(label + "复制结果")
+            feedback.setAccessibilityLabel(label + "複製結果")
             row.addArrangedSubview(feedback)
         }
         return row
@@ -105,7 +105,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
             let check = NSButton(checkboxWithTitle: glyph.title, target: self, action: #selector(toggleDot(_:)))
             check.identifier = NSUserInterfaceItemIdentifier(glyph.rawValue)
             check.state = preferences.layout.hidden.contains(glyph) ? .off : .on
-            check.setAccessibilityLabel("显示" + glyph.title + "圆点")
+            check.setAccessibilityLabel("顯示" + glyph.title + "圓點")
             let image = NSImageView(image: NSImage(systemSymbolName: glyph.symbol, accessibilityDescription: nil) ?? NSImage())
             image.contentTintColor = .secondaryLabelColor
             image.widthAnchor.constraint(equalToConstant: 22).isActive = true
@@ -118,8 +118,8 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
                 b.widthAnchor.constraint(equalToConstant: 30).isActive = true
             }
             up.isEnabled = index > 0; down.isEnabled = index < preferences.layout.order.count - 1
-            up.setAccessibilityLabel(glyph.title + "向前移"); down.setAccessibilityLabel(glyph.title + "向后移")
-            up.toolTip = "向左移动"; down.toolTip = "向右移动"
+            up.setAccessibilityLabel(glyph.title + "向前移"); down.setAccessibilityLabel(glyph.title + "向後移")
+            up.toolTip = "向左移動"; down.toolTip = "向右移動"
             let row = NSStackView(views: [image, check, spacer, up, down])
             row.spacing = 8; row.alignment = .centerY
             row.heightAnchor.constraint(equalToConstant: 28).isActive = true
@@ -166,13 +166,13 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.layout = preferences.layout
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         switch status.focus {
-        case .unavailable: focusStatus.stringValue = "点击下方按钮并在系统弹窗中允许读取。还需在系统设置中开启“共享专注状态”。"
-        default: focusStatus.stringValue = "专注状态可读 · " + status.focus.title
+        case .unavailable: focusStatus.stringValue = "按一下下方按鈕，並在系統對話框中允許讀取。另外還需在系統設定中開啟「共享專注狀態」。"
+        default: focusStatus.stringValue = "專注狀態可讀 · " + status.focus.title
         }
     }
     func present(status: SystemStatus) {
         update(status)
-        showWindow(nil); NSApp.activate(ignoringOtherApps: true)
+        showWindow(nil); NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
     }
 
@@ -183,7 +183,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
             if SMAppService.mainApp.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
         } catch {
             let alert = NSAlert()
-            alert.messageText = "自动启动尚未完成"
+            alert.messageText = "自動啟動尚未完成"
             alert.informativeText = error.localizedDescription
             alert.runModal()
         }
@@ -191,7 +191,10 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     }
     @objc private func openMenuBar() { SystemSettings.open(.menubar) }
     @objc private func requestLocation() { location.requestWhenInUseAuthorization() }
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { onRefresh?() }
+    // CoreLocation delivers this on the run loop that created the manager (main); hop explicitly for Swift 6.
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor [weak self] in self?.onRefresh?() }
+    }
 
     @objc private func openXiaohongshu() {
         if let url = URL(string: "https://www.xiaohongshu.com/user/profile/5fd62d06000000000101e8b1") {
@@ -203,7 +206,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private func copyContact(_ value: String, feedback: NSTextField) {
         NSPasteboard.general.clearContents()
         if NSPasteboard.general.setString(value, forType: .string) {
-            feedback.stringValue = "已复制"
+            feedback.stringValue = "已複製"
         }
     }
 
@@ -211,10 +214,10 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         let center = INFocusStatusCenter.default
         if center.authorizationStatus == .denied || center.authorizationStatus == .restricted {
             let alert = NSAlert()
-            alert.messageText = "专注状态尚未共享"
-            alert.informativeText = "请在系统设置中允许 MyDuoBar 读取专注状态，并在专注模式 → 专注状态中开启共享。MyDuoBar 只读取是否专注，开启时点亮圆点。"
-            alert.addButton(withTitle: "打开专注设置")
-            alert.addButton(withTitle: "稍后")
+            alert.messageText = "專注狀態尚未共享"
+            alert.informativeText = "請在系統設定中允許 MyDuoBar 讀取專注狀態，並在專注模式 → 專注狀態中開啟共享。MyDuoBar 只讀取是否專注，開啟時點亮圓點。"
+            alert.addButton(withTitle: "開啟專注設定")
+            alert.addButton(withTitle: "稍後")
             if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open(.focus) }
             return
         }

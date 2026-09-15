@@ -6,17 +6,11 @@ mkdir -p "$DUOBAR_BUILD"
 DUOBAR_STAGE=$(mktemp -d "$DUOBAR_BUILD/app-stage.XXXXXX")
 trap 'rm -rf "$DUOBAR_STAGE"' EXIT
 DUOBAR_APP="$DUOBAR_STAGE/MyDuoBar.app"
-# Use the SDK shipped with the same developer directory as the compiler. On machines where
-# Command Line Tools carry a newer beta SDK, `xcrun --show-sdk-path` can pick an SDK the
-# selected Xcode compiler cannot read. Override with DUOBAR_SDK=/path/to/MacOSX.sdk.
-DUOBAR_XCODE_SDK="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
-if [[ -z "${DUOBAR_SDK:-}" ]]; then
-    if [[ -d "$DUOBAR_XCODE_SDK" ]]; then DUOBAR_SDK="$DUOBAR_XCODE_SDK"; else DUOBAR_SDK="$(xcrun --show-sdk-path)"; fi
-fi
+source "$DUOBAR_ROOT/scripts/toolchain.sh"
 mkdir -p "$DUOBAR_APP/Contents/MacOS" "$DUOBAR_APP/Contents/Resources" "$DUOBAR_BUILD/module-cache" "$DUOBAR_BUILD/bin"
 for DUOBAR_ARCH in arm64 x86_64; do
-    xcrun swiftc -O -whole-module-optimization -swift-version 5 \
-        -target "$DUOBAR_ARCH-apple-macosx13.0" -sdk "$DUOBAR_SDK" \
+    xcrun swiftc -O -whole-module-optimization -swift-version 6 \
+        -target "$DUOBAR_ARCH-apple-macosx$DUOBAR_DEPLOYMENT_TARGET" -sdk "$DUOBAR_SDK" \
         -module-cache-path "$DUOBAR_BUILD/module-cache" \
         -framework AppKit -framework CoreWLAN -framework CoreAudio -framework IOKit \
         -framework Intents -framework Network -framework SystemConfiguration -framework ServiceManagement -framework CoreLocation \
@@ -24,6 +18,8 @@ for DUOBAR_ARCH in arm64 x86_64; do
 done
 xcrun lipo -create "$DUOBAR_BUILD/bin/MyDuoBar-arm64" "$DUOBAR_BUILD/bin/MyDuoBar-x86_64" -output "$DUOBAR_APP/Contents/MacOS/MyDuoBar"
 cp -X "$DUOBAR_ROOT/Resources/Info.plist" "$DUOBAR_APP/Contents/Info.plist"
+# Keep the bundle's minimum system version in lockstep with the compiler deployment target.
+/usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $DUOBAR_DEPLOYMENT_TARGET" "$DUOBAR_APP/Contents/Info.plist"
 cp -X "$DUOBAR_ROOT/Resources/AppIcon.icns" "$DUOBAR_APP/Contents/Resources/AppIcon.icns"
 /usr/bin/plutil -lint "$DUOBAR_APP/Contents/Info.plist"
 /usr/bin/codesign --force --sign - "$DUOBAR_APP"

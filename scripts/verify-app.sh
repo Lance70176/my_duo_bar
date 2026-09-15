@@ -18,7 +18,12 @@ if [[ -n "$(/usr/bin/find "$DUOBAR_APP" -type l -print)" ]]; then
     exit 1
 fi
 /usr/bin/plutil -lint "$DUOBAR_APP/Contents/Info.plist"
-xcrun lipo "$DUOBAR_APP/Contents/MacOS/MyDuoBar" -verify_arch arm64 x86_64
+# `lipo -verify_arch` parses its operands differently across toolchain versions; compare the list instead.
+DUOBAR_ARCHS=$(xcrun lipo -archs "$DUOBAR_APP/Contents/MacOS/MyDuoBar" | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ')
+if [[ "$DUOBAR_ARCHS" != "arm64 x86_64 " ]]; then
+    print -u2 "Expected arm64 and x86_64 slices, found: $DUOBAR_ARCHS"
+    exit 1
+fi
 /usr/bin/codesign --verify --deep --strict "$DUOBAR_APP"
 DUOBAR_EXTERNAL=$(xcrun otool -L "$DUOBAR_APP/Contents/MacOS/MyDuoBar" | /usr/bin/awk '/^[[:space:]]/ { if ($1 !~ /^\/System\/Library\// && $1 !~ /^\/usr\/lib\//) print $1 }')
 if [[ -n "$DUOBAR_EXTERNAL" ]]; then

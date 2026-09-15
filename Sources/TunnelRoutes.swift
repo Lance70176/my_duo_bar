@@ -76,7 +76,7 @@ enum TunnelRoutes {
                 if let destination {
                     var name = [CChar](repeating: 0, count: Int(IFNAMSIZ))
                     if if_indextoname(UInt32(header.rtm_index), &name) != nil {
-                        let interface = String(cString: name)
+                        let interface = String(decoding: name.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
                         let up = header.rtm_flags & RTF_UP != 0
                         let scoped = header.rtm_flags & RTF_IFSCOPE != 0
                         routes.append(IPv4TunnelRoute(interface: interface, destination: destination,
