@@ -6,7 +6,9 @@ import Intents
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var item: NSStatusItem!
     private let menu = NSMenu()
+    private let panelHeader = StatusPanelHeader()
     private let panel = StatusPanel()
+    private let wifiMenu = WiFiMenuController()
     private let monitor = SystemMonitor()
     private let preferences = DotPreferences()
     private let canvas = StatusIconView()
@@ -32,8 +34,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.menu.cancelTracking()
             DispatchQueue.main.async { SystemSettings.open(page) }
         }
+        wifiMenu.onOpenSettings = { [weak self] page in
+            self?.menu.cancelTracking()
+            DispatchQueue.main.async { SystemSettings.open(page) }
+        }
+        wifiMenu.onWiFiChanged = { [weak self] in self?.monitor.refresh() }
         menu.delegate = self
         menu.autoenablesItems = false
+        let header = NSMenuItem(); header.view = panelHeader; menu.addItem(header)
+        menu.addItem(wifiMenu.item)
         let content = NSMenuItem(); content.view = panel; menu.addItem(content)
         menu.addItem(.separator())
         for menuItem in [systemIconsItem, settingsItem, quitItem] {
@@ -79,7 +88,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Re-render everything that holds text; the refresh rebuilds status strings in the new language.
     private func languageDidChange() {
         applyMenuTitles()
+        panelHeader.update()
         panel.update(monitor.status)
+        wifiMenu.update(status: monitor.status)
         item.button?.setAccessibilityLabel(monitor.status.accessibilitySummary)
         settings?.update(monitor.status)
         monitor.refresh()
@@ -90,11 +101,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.button?.setAccessibilityLabel(state.accessibilitySummary)
         // Deliberately no tracking area or hover expansion.
         panel.update(state)
+        wifiMenu.update(status: state)
         settings?.update(state)
     }
     func menuWillOpen(_ menu: NSMenu) {
         canvas.animateTurn()
         panel.update(monitor.status)
+        wifiMenu.update(status: monitor.status)
+        wifiMenu.prepare()
         monitor.setMenuOpen(true)
     }
     func menuDidClose(_ menu: NSMenu) { monitor.setMenuOpen(false) }

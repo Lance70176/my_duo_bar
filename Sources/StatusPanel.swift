@@ -103,33 +103,51 @@ final class StatusRow: NSButton {
     }
 }
 
-final class StatusPanel: NSView {
-    static let panelSize = NSSize(width: 314, height: 312)
-    var onOpenSettings: ((SystemSettings.Page) -> Void)?
-    private let wifi = StatusRow(height: 55, destination: .wifi)
-    private let battery = StatusRow(height: 55, destination: .battery)
-    private let vpn = StatusRow(height: 35, destination: .vpn, compact: true)
-    private let headphones = StatusRow(height: 35, destination: .bluetooth, compact: true)
-    private let sound = StatusRow(height: 35, destination: .sound, compact: true)
-    private let focus = StatusRow(height: 35, destination: .focus, compact: true)
+/// "MyDuoBar · This Mac" line at the top of the status menu.
+final class StatusPanelHeader: NSView {
+    static let headerSize = NSSize(width: 314, height: 35)
     private let title = NSTextField(labelWithString: "MyDuoBar")
     private let mode = NSTextField(labelWithString: L10n.thisMac)
     override var allowsVibrancy: Bool { true }
 
     init() {
-        super.init(frame: NSRect(origin: .zero, size: Self.panelSize))
+        super.init(frame: NSRect(origin: .zero, size: Self.headerSize))
         title.font = .systemFont(ofSize: 12, weight: .semibold)
         mode.font = .systemFont(ofSize: 11)
         mode.textColor = .secondaryLabelColor
-        let spacer = NSView()
-        let header = NSStackView(views: [title, spacer, mode])
+        let header = NSStackView(views: [title, NSView(), mode])
         header.orientation = .horizontal; header.alignment = .centerY
-        header.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        header.translatesAutoresizingMaskIntoConstraints = false; addSubview(header)
+        NSLayoutConstraint.activate([
+            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            header.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+            header.heightAnchor.constraint(equalToConstant: 30)
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(preview: Bool = false) { mode.stringValue = preview ? L10n.sampleStatus : L10n.thisMac }
+}
+
+/// Battery and the four status rows. Wi-Fi lives in its own native menu item so it can open a submenu.
+final class StatusPanel: NSView {
+    static let panelSize = NSSize(width: 314, height: 224)
+    var onOpenSettings: ((SystemSettings.Page) -> Void)?
+    private let battery = StatusRow(height: 55, destination: .battery)
+    private let vpn = StatusRow(height: 35, destination: .vpn, compact: true)
+    private let headphones = StatusRow(height: 35, destination: .bluetooth, compact: true)
+    private let sound = StatusRow(height: 35, destination: .sound, compact: true)
+    private let focus = StatusRow(height: 35, destination: .focus, compact: true)
+    override var allowsVibrancy: Bool { true }
+
+    init() {
+        super.init(frame: NSRect(origin: .zero, size: Self.panelSize))
         let separator = NSBox()
         separator.boxType = .separator
         separator.heightAnchor.constraint(equalToConstant: 1).isActive = true
         let gap = NSView(); gap.heightAnchor.constraint(equalToConstant: 5).isActive = true
-        let stack = NSStackView(views: [header, wifi, battery, separator, gap, vpn, headphones, sound, focus])
+        let stack = NSStackView(views: [battery, separator, gap, vpn, headphones, sound, focus])
         stack.orientation = .vertical
         stack.alignment = .leading; stack.spacing = 0
         for row in stack.arrangedSubviews { row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
@@ -137,9 +155,9 @@ final class StatusPanel: NSView {
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 5)
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 2)
         ])
-        for row in [wifi, battery, vpn, headphones, sound, focus] {
+        for row in [battery, vpn, headphones, sound, focus] {
             row.onActivate = { [weak self, weak row] in
                 guard let row else { return }
                 self?.onOpenSettings?(row.destination)
@@ -150,12 +168,7 @@ final class StatusPanel: NSView {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func update(_ state: SystemStatus, preview: Bool = false) {
-        mode.stringValue = preview ? L10n.sampleStatus : L10n.thisMac
-        wifi.destination = state.wifi.route == .ethernet && !state.wifi.associated ? .network : .wifi
-        wifi.update(symbol: state.wifi.symbol, title: state.wifi.route == .ethernet && !state.wifi.associated ? L10n.ethernet : "Wi-Fi",
-                    detail: state.wifi.title, value: state.wifi.associated ? state.wifi.signalQuality : "", active: state.wifi.associated || state.wifi.route == .ethernet)
-        wifi.toolTip = state.wifi.detail
+    func update(_ state: SystemStatus) {
         let batterySymbol = state.battery.charging ? "battery.100percent.bolt" : "battery.75percent"
         battery.update(symbol: state.battery.present ? batterySymbol : "powerplug",
                        title: L10n.battery, detail: state.battery.detail, value: state.battery.title)

@@ -12,6 +12,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private let focusStatus = NSTextField(wrappingLabelWithString: "")
     private let location = CLLocationManager()
     private let icon = LargeIconView()
+    private let dotsGuide = NSTextField(wrappingLabelWithString: "")
     private var stack: NSStackView?
     var onRefresh: (() -> Void)?
     /// Called after the user picks another language, once the preference has been saved.
@@ -58,6 +59,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         let names = NSStackView(views: [name, caption]); names.orientation = .vertical; names.alignment = .leading; names.spacing = 5
         let header = NSStackView(views: [icon, names]); header.spacing = 15
         stack.addArrangedSubview(header)
+        buildIconGuide(stack)
         addSeparator(stack)
 
         languagePopup.removeAllItems()
@@ -107,6 +109,68 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         fitWindowToContent()
     }
 
+    /// Explains every part of the icon, each line with a small drawing of the part it describes.
+    private func buildIconGuide(_ stack: NSStackView) {
+        stack.addArrangedSubview(heading(L10n.iconGuide))
+        let ink = NSColor.labelColor
+        let green = NSColor(calibratedRed: 0.18, green: 0.80, blue: 0.38, alpha: 1)
+        dotsGuide.font = .systemFont(ofSize: 11); dotsGuide.textColor = .secondaryLabelColor
+        dotsGuide.preferredMaxLayoutWidth = Self.contentWidth - 52 - 30
+        let rows: [(NSImage, NSTextField)] = [
+            (Self.guideImage { Self.drawRing(ink, fraction: 0.7) }, guideLabel(L10n.guideRing)),
+            (Self.guideImage { Self.drawRing(green, fraction: 1) }, guideLabel(L10n.guideRingGreen)),
+            (Self.guideImage { Self.drawRing(.systemYellow, fraction: 1) }, guideLabel(L10n.guideRingYellow)),
+            (NSImage(systemSymbolName: "wifi", accessibilityDescription: nil)!
+                .withSymbolConfiguration(.init(pointSize: 12, weight: .semibold))!, guideLabel(L10n.guideCenter)),
+            (Self.guideImage { Self.drawDots(ink) }, dotsGuide)
+        ]
+        for (image, label) in rows {
+            let picture = NSImageView(image: image)
+            picture.contentTintColor = .labelColor
+            picture.translatesAutoresizingMaskIntoConstraints = false
+            picture.widthAnchor.constraint(equalToConstant: 22).isActive = true
+            picture.heightAnchor.constraint(equalToConstant: 16).isActive = true
+            let row = NSStackView(views: [picture, label])
+            row.spacing = 8; row.alignment = .firstBaseline
+            stack.addArrangedSubview(row)
+        }
+        updateIconGuide()
+    }
+
+    private func guideLabel(_ text: String) -> NSTextField {
+        let label = note(text)
+        label.preferredMaxLayoutWidth = Self.contentWidth - 52 - 30
+        return label
+    }
+
+    /// Dot order and visibility change at runtime, so this line and the icon tooltip follow the preferences.
+    private func updateIconGuide() {
+        dotsGuide.stringValue = L10n.guideDots(preferences.layout.visible.map(\.title))
+        icon.toolTip = [L10n.guideRing, L10n.guideRingGreen, L10n.guideRingYellow, L10n.guideCenter, dotsGuide.stringValue]
+            .joined(separator: "\n")
+    }
+
+    private static func guideImage(_ draw: @escaping () -> Void) -> NSImage {
+        NSImage(size: NSSize(width: 22, height: 16), flipped: false) { _ in draw(); return true }
+    }
+    private static func drawRing(_ color: NSColor, fraction: CGFloat) {
+        let center = NSPoint(x: 11, y: 8)
+        color.withAlphaComponent(0.25).setStroke()
+        let track = NSBezierPath(); track.lineWidth = 2; track.lineCapStyle = .round
+        track.appendArc(withCenter: center, radius: 6.5, startAngle: 210, endAngle: -30, clockwise: true)
+        track.stroke()
+        color.setStroke()
+        let arc = NSBezierPath(); arc.lineWidth = 2; arc.lineCapStyle = .round
+        arc.appendArc(withCenter: center, radius: 6.5, startAngle: 210, endAngle: 210 - 240 * fraction, clockwise: true)
+        arc.stroke()
+    }
+    private static func drawDots(_ color: NSColor) {
+        for (index, alpha) in [1.0, 0.5, 0.5, 1.0].enumerated() {
+            color.withAlphaComponent(alpha).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 2 + CGFloat(index) * 5, y: 5.5, width: 4, height: 4)).fill()
+        }
+    }
+
     /// Text length differs per language, so size the window to its content instead of a fixed height.
     private func fitWindowToContent() {
         guard let window, let stack else { return }
@@ -148,11 +212,13 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
             row.widthAnchor.constraint(equalTo: dotRows.widthAnchor).isActive = true
         }
         icon.layout = preferences.layout
+        updateIconGuide()
     }
     @objc private func toggleDot(_ sender: NSButton) {
         guard let value = sender.identifier?.rawValue, let glyph = StatusGlyph(rawValue: value) else { return }
         preferences.setVisible(sender.state == .on, for: glyph)
         icon.layout = preferences.layout
+        updateIconGuide()
     }
     @objc private func moveDotUp(_ sender: NSButton) { moveDot(sender, by: -1) }
     @objc private func moveDotDown(_ sender: NSButton) { moveDot(sender, by: 1) }

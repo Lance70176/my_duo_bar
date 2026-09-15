@@ -162,6 +162,40 @@ enum L10n {
     static var headphonesConnected: String { pick("耳機已連線", "Headphones Connected", "ヘッドフォン接続済み") }
     static var focusOn: String { pick("專注已開啟", "Focus On", "集中モード オン") }
 
+    // MARK: Wi-Fi submenu
+    static var knownNetworks: String { pick("已知的網路", "Known Networks", "既知のネットワーク") }
+    static var otherNetworks: String { pick("其他網路", "Other Networks", "その他のネットワーク") }
+    static var wifiSettingsMenu: String { pick("Wi-Fi 設定…", "Wi-Fi Settings…", "Wi-Fi 設定…") }
+    static var scanningNetworks: String { pick("正在搜尋網路…", "Scanning for Networks…", "ネットワークを検索中…") }
+    static var noNetworksFound: String { pick("找不到網路", "No Networks Found", "ネットワークが見つかりません") }
+    static var noKnownNetworksNearby: String { pick("附近沒有已知的網路", "No Known Networks Nearby", "近くに既知のネットワークはありません") }
+    static var allowNetworkNames: String { pick("允許顯示網路名稱…", "Allow Network Names…", "ネットワーク名の表示を許可…") }
+    static var secured: String { pick("需要密碼", "Secured", "パスワード保護") }
+    static var wifiPower: String { pick("Wi-Fi 開關", "Wi-Fi Power", "Wi-Fi のオン/オフ") }
+
+    // MARK: Icon guide
+    static var iconGuide: String { pick("圖示說明", "Icon Guide", "アイコンの見かた") }
+    static var guideRing: String {
+        pick("外圈：電池電量，電量減少時從右側開始消退。",
+             "Outer ring: battery level. It shortens from the right as charge drops.",
+             "外周：バッテリー残量。残量が減ると右側から短くなります。")
+    }
+    static var guideRingGreen: String { pick("綠色外圈：已接上電源。", "Green ring: connected to power.", "緑の外周：電源に接続中。") }
+    static var guideRingYellow: String { pick("黃色外圈：低耗電模式已開啟。", "Yellow ring: Low Power Mode is on.", "黄色の外周：低電力モードがオン。") }
+    static var guideCenter: String {
+        pick("中間：Wi-Fi 訊號強度，斜線代表未連線，使用有線網路時顯示網路圖示。",
+             "Center: Wi-Fi signal strength. A slash means not connected; a network symbol means a wired connection.",
+             "中央：Wi-Fi の電波強度。斜線は未接続、ネットワーク記号は有線接続を表します。")
+    }
+    static func guideDots(_ titles: [String]) -> String {
+        guard !titles.isEmpty else {
+            return pick("底部圓點：目前全部隱藏。", "Bottom dots: all hidden.", "下部のドット：すべて非表示です。")
+        }
+        return pick("底部圓點：由左到右為\(titles.joined(separator: "、"))。點亮代表開啟，變灰代表未開啟。",
+                    "Bottom dots, left to right: \(titles.joined(separator: ", ")). Lit means on; gray means off.",
+                    "下部のドット：左から\(titles.joined(separator: "、"))。点灯はオン、グレーはオフです。")
+    }
+
     // MARK: Panel
     static var thisMac: String { pick("此 Mac", "This Mac", "この Mac") }
     static var sampleStatus: String { pick("範例狀態", "Sample", "サンプル") }

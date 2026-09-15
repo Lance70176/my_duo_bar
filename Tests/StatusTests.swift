@@ -127,6 +127,36 @@ import Foundation
             check(!L10n.quit.isEmpty && !L10n.focusNotSharedBody.isEmpty, "\(language) has menu and alert text")
         }
         check(Set(seen.values).count == 3, "each language has its own settings text")
+
+        typealias Raw = WiFiNetworkList.Raw
+        let scan = [Raw(ssid: "Home", rssi: -70, secure: true, channel: 36), Raw(ssid: "Home", rssi: -50, secure: true, channel: 149),
+                    Raw(ssid: "Cafe", rssi: -65, secure: false, channel: 6), Raw(ssid: "Office", rssi: -40, secure: true, channel: 1),
+                    Raw(ssid: nil, rssi: -30, secure: true, channel: 11), Raw(ssid: "", rssi: -30, secure: true, channel: 11),
+                    Raw(ssid: "Printer", rssi: -80, secure: true, channel: 6)]
+        let grouped = WiFiNetworkList.build(raw: scan, knownSSIDs: ["Home", "Office", "Gone"], powered: true,
+                                            currentSSID: "Home", currentChannel: 149, currentRSSI: -50)
+        check(grouped.known.map(\.ssid) == ["Home", "Office"], "connected network first, then known networks by strength")
+        check(grouped.known[0].current && grouped.known[0].rssi == -50, "duplicate access points keep the strongest signal")
+        check(grouped.other.map(\.ssid) == ["Cafe", "Printer"], "unsaved networks sorted by strength, hidden names dropped")
+        check(!grouped.other[0].secure && grouped.other[1].secure, "open and secured networks are told apart")
+        check(!grouped.namesHidden, "named results are not reported as hidden")
+        check(grouped.known.allSatisfy { $0.ssid != "Gone" }, "saved networks out of range are not listed")
+        let byChannel = WiFiNetworkList.build(raw: scan, knownSSIDs: ["Home", "Office"], powered: true,
+                                              currentSSID: nil, currentChannel: 149, currentRSSI: -52)
+        check(byChannel.known.first?.ssid == "Home" && byChannel.known.first?.current == true,
+              "the connected network is recognised by channel when its name is withheld")
+        let notAssociated = WiFiNetworkList.build(raw: scan, knownSSIDs: ["Home"], powered: true,
+                                                  currentSSID: nil, currentChannel: nil, currentRSSI: nil)
+        check(!notAssociated.known.contains { $0.current }, "no network is marked connected when not associated")
+        let redacted = WiFiNetworkList.build(raw: [Raw(ssid: nil, rssi: -50, secure: true, channel: 1)], knownSSIDs: [], powered: true,
+                                             currentSSID: nil, currentChannel: nil, currentRSSI: nil)
+        check(redacted.namesHidden && redacted.known.isEmpty && redacted.other.isEmpty, "withheld names ask for permission")
+        check(WiFiNetworkList.build(raw: scan, knownSSIDs: ["Home"], powered: false, currentSSID: "Home",
+                                    currentChannel: nil, currentRSSI: nil) == WiFiScanResult(powered: false), "Wi-Fi off lists nothing")
+        check(WiFiNetwork(ssid: "a", rssi: -60, secure: false, known: false, current: false).signalLevel == 3 &&
+              WiFiNetwork(ssid: "a", rssi: -72, secure: false, known: false, current: false).signalLevel == 2 &&
+              WiFiNetwork(ssid: "a", rssi: -73, secure: false, known: false, current: false).signalLevel == 1,
+              "network signal levels match the menu bar icon thresholds")
         check(AppLanguage.allCases.map(\.rawValue) == ["system", "zh-Hant", "en", "ja"], "language menu order and stored identifiers")
         L10n.overrideForTesting(nil)
         print("PASS: \(checks) state combinations and unavailable-data checks")
