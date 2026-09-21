@@ -507,7 +507,11 @@ extension PanelTests {
               && BatteryMenuController.symbol(BatteryState()) == "powerplug", "the battery symbol follows level and charging")
 
         menu.menuWillOpen(menu.submenu)
+        let limitItem = menu.submenu.items[1]
+        check(menu.levelItems.isEmpty, "before the first read the submenu has no level rows yet")
         spin(0.2)
+        check(menu.submenu.items[1] === limitItem && limitItem.view === menu.limitRow,
+              "levels arriving after the submenu opened are inserted without re-adding the switch row")
         check(menu.submenu.items.first?.isSectionHeader == true && menu.submenu.items.first?.title == "充電上限"
               && menu.submenu.items[1].view === menu.limitRow && menu.submenu.items.last?.title == "電池設定…",
               "the submenu has a Charge Limit header, the switch row and Battery Settings")

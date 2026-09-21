@@ -94,7 +94,8 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         let levelsChanged = fresh.levels != state?.levels || fresh.supported != state?.supported
         state = fresh
         if fresh.enabled, fresh.levels.contains(fresh.limit) { defaults.set(fresh.limit, forKey: Self.levelKey) }
-        if submenuOpen, levelsChanged { rebuild() } else { refreshRows() }
+        if submenuOpen, levelsChanged { rebuildLevels() }
+        refreshRows()
     }
 
     func rebuild() {
@@ -103,18 +104,26 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         let limit = NSMenuItem(title: L10n.chargeLimit, action: nil, keyEquivalent: "")
         limit.view = limitRow
         submenu.addItem(limit)
-        for level in state?.levels ?? [] {
-            let row = NSMenuItem(title: L10n.chargeLimitLevel(level), action: #selector(chooseLevel(_:)), keyEquivalent: "")
-            row.target = self
-            row.representedObject = NSNumber(value: level)
-            row.indentationLevel = 1
-            submenu.addItem(row)
-        }
         submenu.addItem(.separator())
         let settings = NSMenuItem(title: L10n.batterySettingsMenu, action: #selector(openBatterySettings), keyEquivalent: "")
         settings.target = self
         submenu.addItem(settings)
+        rebuildLevels()
         refreshRows()
+    }
+
+    /// Replaces the level rows in place. The switch row keeps its item: a view removed from an open menu
+    /// and added back is no longer drawn, which left a blank space above the levels.
+    private func rebuildLevels() {
+        for item in levelItems { submenu.removeItem(item) }
+        guard let anchor = submenu.items.firstIndex(where: { $0.view === limitRow }) else { return }
+        for (offset, level) in (state?.levels ?? []).enumerated() {
+            let row = NSMenuItem(title: L10n.chargeLimitLevel(level), action: #selector(chooseLevel(_:)), keyEquivalent: "")
+            row.target = self
+            row.representedObject = NSNumber(value: level)
+            row.indentationLevel = 1
+            submenu.insertItem(row, at: anchor + 1 + offset)
+        }
     }
 
     /// The level rows, in the order macOS offers them.
