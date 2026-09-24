@@ -1,4 +1,4 @@
 "NSFocusStatusUsageDescription" = "集中モードがオンかどうかを読み取り、メニューバーの集中モードのドットを点灯します。どのモードかや個人的な内容は読み取りません。";
 "NSLocationUsageDescription" = "接続中の Wi-Fi ネットワーク名を読み取るためだけに使用します。MyDuoBar は座標を取得せず、位置情報を保存・送信しません。";
 "NSLocationWhenInUseUsageDescription" = "接続中の Wi-Fi ネットワーク名を読み取るためだけに使用します。座標は取得しません。";
-"NSBluetoothAlwaysUsageDescription" = "ペアリング済みの Bluetooth デバイスを一覧表示し、メニューから接続または切断するために使用します。デバイスの検索、ペアリング、データの読み取りは行いません。";
+"NSBluetoothAlwaysUsageDescription" = "ペアリング済みの Bluetooth デバイスを一覧表示し、メニューから接続または切断し、接続中のデバイスのバッテリー残量を表示するために使用します。デバイスの検索やペアリングは行わず、残量以外のデータは読み取りません。";

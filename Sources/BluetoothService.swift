@@ -1,4 +1,28 @@
 import IOBluetooth
+import ObjectiveC
+
+/// What a device reports about its battery: one level, or AirPods' left bud, right bud and case.
+enum BluetoothBattery: Equatable, Sendable {
+    case single(Int)
+    case earbuds(left: Int?, right: Int?, case: Int?)
+
+    /// One figure for the Bluetooth item's subtitle: the level, or the lower bud.
+    var brief: String {
+        switch self {
+        case .single(let percent): return "\(percent)%"
+        case .earbuds(let left, let right, let box):
+            if let lowest = [left, right].compactMap({ $0 }).min() { return "\(lowest)%" }
+            return box.map { "\($0)%" } ?? ""
+        }
+    }
+    /// The full text for a device row, e.g. "95%" or "L 100% · R 90% · Case 86%".
+    var summary: String {
+        switch self {
+        case .single(let percent): return "\(percent)%"
+        case .earbuds(let left, let right, let box): return L10n.earbudsBattery(left: left, right: right, case: box)
+        }
+    }
+}
 
 /// A device paired with this Mac, as the Bluetooth submenu lists it.
 struct BluetoothDevice: Equatable, Sendable {
@@ -22,6 +46,19 @@ struct BluetoothDevice: Equatable, Sendable {
     var name: String
     var symbol: String
     var status: Status
+    /// The battery level while connected; nil when the device doesn't report one.
+    var battery: BluetoothBattery?
+
+    /// The status line under the name: "Connected · 81%" once the level is known.
+    var detail: String {
+        guard status == .connected, let battery else { return status.title }
+        return status.title + " · " + battery.summary
+    }
+    /// The name with its level, for the list of connected devices under the Bluetooth item.
+    var listing: String {
+        guard status == .connected, let battery, !battery.brief.isEmpty else { return name }
+        return name + " " + battery.brief
+    }
 
     /// SF Symbol for a device, from its name and Bluetooth device class.
     static func symbol(name: String, major: UInt32, minor: UInt32) -> String {
@@ -69,29 +106,55 @@ struct BluetoothState: Equatable, Sendable {
     static var unavailable: BluetoothState { BluetoothState(powered: nil) }
 
     var connectedNames: [String] { devices.filter { $0.status == .connected }.map(\.name) }
-    /// The subtitle under the Bluetooth item.
+    /// The subtitle under the Bluetooth item: connected devices with their levels.
     var title: String {
         guard let powered else { return L10n.bluetoothUnavailable }
         guard powered else { return L10n.turnedOff }
-        let names = connectedNames
-        return names.isEmpty ? L10n.notConnected : names.joined(separator: L10n.listSeparator)
+        let listings = devices.filter { $0.status == .connected }.map(\.listing)
+        return listings.isEmpty ? L10n.notConnected : listings.joined(separator: L10n.listSeparator)
     }
 }
 
 /// Reads paired devices and connects or disconnects them through IOBluetooth, the public framework the
 /// system Bluetooth menu is built on. Nothing is paired, unpaired or discovered here.
+///
+/// Battery levels come from two places. Apple devices (Magic Trackpad, Magic Keyboard, AirPods) report
+/// them through `IOBluetoothDevice` properties macOS keeps but doesn't declare publicly; they are looked
+/// up at runtime and simply absent when missing. Other Bluetooth Low Energy devices are read through
+/// `BLEBatteryReader`, which uses the standard Battery Service with Core Bluetooth.
 enum BluetoothService {
     static func read() -> BluetoothState {
         guard let controller = IOBluetoothHostController.default() else { return .unavailable }
         let powered = controller.powerState == kBluetoothHCIPowerStateON
         let paired = (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice]) ?? []
+        let bleLevels = powered ? BLEBatteryReader.shared.levels() : [:]
         let devices = paired.compactMap { device -> BluetoothDevice? in
             guard let id = device.addressString, !id.isEmpty else { return nil }
             let name = device.name ?? device.nameOrAddress ?? id
             let symbol = BluetoothDevice.symbol(name: name, major: UInt32(device.deviceClassMajor), minor: UInt32(device.deviceClassMinor))
-            return BluetoothDevice(id: id, name: name, symbol: symbol, status: device.isConnected() ? .connected : .disconnected)
+            let connected = device.isConnected()
+            let battery = connected ? (appleBattery(device) ?? bleLevels[name].map { .single($0) }) : nil
+            return BluetoothDevice(id: id, name: name, symbol: symbol, status: connected ? .connected : .disconnected, battery: battery)
         }
         return BluetoothState(powered: powered, devices: sorted(devices))
+    }
+
+    /// A level macOS keeps for Apple devices, read from an undeclared `IOBluetoothDevice` property. 0 means unknown.
+    private static func percent(_ device: IOBluetoothDevice, _ property: String) -> Int? {
+        let selector = NSSelectorFromString(property)
+        guard device.responds(to: selector), let method = class_getInstanceMethod(type(of: device), selector),
+              method_getTypeEncoding(method).map({ String(cString: $0) })?.hasPrefix("C") == true else { return nil }
+        typealias Getter = @convention(c) (AnyObject, Selector) -> UInt8
+        let value = unsafeBitCast(method_getImplementation(method), to: Getter.self)(device, selector)
+        return value > 0 ? Int(min(value, 100)) : nil
+    }
+
+    static func appleBattery(_ device: IOBluetoothDevice) -> BluetoothBattery? {
+        let left = percent(device, "batteryPercentLeft")
+        let right = percent(device, "batteryPercentRight")
+        let box = percent(device, "batteryPercentCase")
+        if left != nil || right != nil || box != nil { return .earbuds(left: left, right: right, case: box) }
+        return percent(device, "batteryPercentSingle").map { .single($0) }
     }
 
     /// Connected devices first, then by name, like the system Bluetooth menu.

@@ -406,8 +406,15 @@ extension PanelTests {
 
     /// Exercises the Bluetooth submenu against fake devices: nothing real is connected or disconnected.
     static func bluetoothChecks() {
-        let airpods = BluetoothDevice(id: "aa-bb", name: "AirPods Pro", symbol: "airpodspro", status: .connected)
-        let keyboard = BluetoothDevice(id: "cc-dd", name: "Magic Keyboard", symbol: "keyboard", status: .disconnected)
+        let airpods = BluetoothDevice(id: "aa-bb", name: "AirPods Pro", symbol: "airpodspro", status: .connected,
+                                      battery: .earbuds(left: 100, right: 90, case: 86))
+        let keyboard = BluetoothDevice(id: "cc-dd", name: "Magic Keyboard", symbol: "keyboard", status: .disconnected, battery: .single(81))
+        check(BluetoothBattery.single(95).summary == "95%" && BluetoothBattery.single(95).brief == "95%"
+              && airpods.battery?.summary == "左 100% · 右 90% · 盒 86%" && airpods.battery?.brief == "90%"
+              && BluetoothBattery.earbuds(left: nil, right: nil, case: 50).brief == "50%"
+              && BluetoothBattery.earbuds(left: nil, right: nil, case: nil).brief == "",
+              "battery levels read as one figure, or the buds and case")
+        check(keyboard.detail == "未連線" && keyboard.listing == "Magic Keyboard", "a disconnected device shows no level")
         let fake = FakeBluetoothService(BluetoothState(powered: true, devices: [airpods, keyboard]))
         let bluetooth = BluetoothMenuController()
         bluetooth.service = fake
@@ -420,20 +427,20 @@ extension PanelTests {
 
         bluetooth.menuWillOpen(bluetooth.submenu)
         spin(0.2)
-        check(bluetooth.item.subtitle == "AirPods Pro", "the item lists the connected devices")
+        check(bluetooth.item.subtitle == "AirPods Pro 90%", "the item lists the connected devices with their levels")
         let rows = { bluetooth.submenu.items.compactMap { $0.view as? BluetoothRowView } }
         check(bluetooth.submenu.items.first?.isSectionHeader == true && bluetooth.submenu.items.first?.title == "裝置"
               && bluetooth.submenu.items.last?.title == "藍牙設定…", "the submenu has a Devices header and ends with Bluetooth Settings")
         check(rows().map(\.device.name) == ["AirPods Pro", "Magic Keyboard"] && rows().map(\.toggleSwitch.isOn) == [true, false]
-              && rows().map(\.detailText) == ["已連線", "未連線"] && rows()[0].symbolName == "airpodspro",
+              && rows().map(\.detailText) == ["已連線 · 左 100% · 右 90% · 盒 86%", "未連線"] && rows()[0].symbolName == "airpodspro",
               "every paired device has a row with its icon, state and switch")
 
         rows()[1].onToggle?()
         check(rows()[1].detailText == "連線中…" && rows()[1].toggleSwitch.isOn && !rows()[1].toggleSwitch.isEnabled,
               "toggling a device shows Connecting and locks its switch")
         spin(0.3)
-        check(fake.calls == ["connect cc-dd"] && rows()[1].detailText == "已連線" && rows()[1].toggleSwitch.isEnabled && changes == 1
-              && bluetooth.item.subtitle == "AirPods Pro、Magic Keyboard", "a connected device settles and the item follows")
+        check(fake.calls == ["connect cc-dd"] && rows()[1].detailText == "已連線 · 81%" && rows()[1].toggleSwitch.isEnabled && changes == 1
+              && bluetooth.item.subtitle == "AirPods Pro 90%、Magic Keyboard 81%", "a connected device settles and the item follows with its level")
 
         rows()[0].onToggle?()
         check(rows()[0].detailText == "正在中斷…", "toggling a connected device shows Disconnecting")
@@ -464,8 +471,8 @@ extension PanelTests {
 
         L10n.overrideForTesting(.en)
         bluetooth.rebuild()
-        check(bluetooth.submenu.items.last?.title == "Bluetooth Settings…" && bluetooth.item.subtitle == "Bluetooth Unavailable",
-              "the Bluetooth submenu follows the app language")
+        check(bluetooth.submenu.items.last?.title == "Bluetooth Settings…" && bluetooth.item.subtitle == "Bluetooth Unavailable"
+              && airpods.battery?.summary == "L 100% · R 90% · Case 86%", "the Bluetooth submenu follows the app language")
         L10n.overrideForTesting(.zhHant)
         bluetooth.menuDidClose(bluetooth.submenu)
 

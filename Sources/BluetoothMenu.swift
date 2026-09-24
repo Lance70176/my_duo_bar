@@ -208,7 +208,7 @@ final class BluetoothRowView: SwitchRowView {
 
     func update(_ device: BluetoothDevice) {
         self.device = device
-        configure(symbol: device.symbol, title: device.name, detail: device.status.title,
+        configure(symbol: device.symbol, title: device.name, detail: device.detail,
                   isOn: device.status.isOn, isEnabled: !device.status.isTransitioning,
                   help: L10n.bluetoothToggle(device.name))
     }

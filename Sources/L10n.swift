@@ -216,6 +216,14 @@ enum L10n {
     static var noPairedDevices: String { pick("沒有已配對的裝置", "No Paired Devices", "ペアリング済みのデバイスがありません") }
     static var bluetoothSettingsMenu: String { pick("藍牙設定…", "Bluetooth Settings…", "Bluetooth 設定…") }
     static func bluetoothToggle(_ name: String) -> String { pick("連線或中斷 \(name)", "Connect or disconnect \(name)", "\(name) を接続または切断") }
+    /// AirPods levels, e.g. "左 100% · 右 90% · 盒 86%"; parts the device doesn't report are left out.
+    static func earbudsBattery(left: Int?, right: Int?, case box: Int?) -> String {
+        var parts: [String] = []
+        if let left { parts.append(pick("左 \(left)%", "L \(left)%", "左 \(left)%")) }
+        if let right { parts.append(pick("右 \(right)%", "R \(right)%", "右 \(right)%")) }
+        if let box { parts.append(pick("盒 \(box)%", "Case \(box)%", "ケース \(box)%")) }
+        return parts.joined(separator: " · ")
+    }
 
     // MARK: Icon guide
     static var iconGuide: String { pick("圖示說明", "Icon Guide", "アイコンの見かた") }
