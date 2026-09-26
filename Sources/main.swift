@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let menu = NSMenu()
     private let panelHeader = StatusPanelHeader()
     private let batteryMenu = BatteryMenuController()
+    private let sleepMenu = SleepMenuController()
     private let focusPanel = StatusPanel()
     private let wifiMenu = WiFiMenuController()
     private let vpnMenu = VPNMenuController()
@@ -39,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.async { SystemSettings.open(page) }
         }
         batteryMenu.onOpenSettings = openSettings
+        sleepMenu.onOpenSettings = openSettings
         focusPanel.onOpenSettings = openSettings
         wifiMenu.onOpenSettings = openSettings
         vpnMenu.onOpenSettings = openSettings
@@ -54,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let header = NSMenuItem(); header.view = panelHeader; menu.addItem(header)
         menu.addItem(wifiMenu.item)
         menu.addItem(batteryMenu.item)
+        menu.addItem(sleepMenu.item)
         menu.addItem(vpnMenu.item)
         menu.addItem(bluetoothMenu.item)
         menu.addItem(soundMenu.item)
@@ -111,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func updateMenuRows(_ state: SystemStatus) {
         batteryMenu.update(status: state)
+        sleepMenu.refresh()
         wifiMenu.update(status: state)
         vpnMenu.update(status: state)
         bluetoothMenu.update(status: state)
@@ -152,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func openSystemIcons() { SystemSettings.open(.menubar) }
     @objc private func quitApp() { NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop() }
+    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop(); sleepMenu.stop() }
 }
 
 if CommandLine.arguments.contains("--diagnose") {

@@ -130,6 +130,25 @@ enum L10n {
     static var chargeLimitToggle: String { pick("切換充電上限", "Turn the charge limit on or off", "充電上限を切り替え") }
     static var batterySettingsMenu: String { pick("電池設定…", "Battery Settings…", "バッテリー設定…") }
 
+    // MARK: Keep awake submenu
+    static var keepAwake: String { pick("防止休眠", "Keep Awake", "スリープ防止") }
+    static var keepAwakeIndefinite: String { pick("已開啟 · 直到關閉", "On · Until turned off", "オン · オフにするまで") }
+    static func keepAwakeRemaining(_ minutes: Int) -> String {
+        let hours = minutes / 60, rest = minutes % 60
+        if minutes >= 60 {
+            return pick("已開啟 · 還有 \(hours) 小時 \(rest) 分鐘", "On · \(hours) hr \(rest) min left", "オン · 残り \(hours) 時間 \(rest) 分")
+        }
+        return pick("已開啟 · 還有 \(minutes) 分鐘", "On · \(minutes) min left", "オン · 残り \(minutes) 分")
+    }
+    static var keepAwakeOff: String { pick("未開啟，Mac 會照設定休眠", "Off · Your Mac sleeps as configured", "オフ · Mac は設定どおりスリープします") }
+    static var keepAwakeToggle: String { pick("切換防止休眠", "Turn keep awake on or off", "スリープ防止を切り替え") }
+    static var untilTurnedOff: String { pick("直到關閉", "Until Turned Off", "オフにするまで") }
+    static func keepAwakeFor(_ minutes: Int) -> String {
+        if minutes % 60 == 0 { let hours = minutes / 60; return pick("\(hours) 小時", "\(hours) hr", "\(hours) 時間") }
+        return pick("\(minutes) 分鐘", "\(minutes) min", "\(minutes) 分")
+    }
+    static var keepDisplayOn: String { pick("同時保持螢幕不關閉", "Also Keep the Display On", "ディスプレイもオンのまま") }
+
     // MARK: Network
     static var wifiConnected: String { pick("已連線 Wi-Fi", "Connected to Wi-Fi", "Wi-Fi に接続済み") }
     static var ethernet: String { pick("乙太網路", "Ethernet", "Ethernet") }

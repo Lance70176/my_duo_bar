@@ -89,11 +89,12 @@ import CoreAudio
         inputChecks()
         bluetoothChecks()
         batteryChecks()
+        sleepChecks()
         L10n.overrideForTesting(nil)
         check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "the Bluetooth submenu targets Bluetooth settings")
         check(SystemSettings.Page.allCases.allSatisfy { $0.url.scheme == "x-apple.systempreferences" },
               "settings links stay within the system settings application")
-        print("PASS: native settings actions, Wi-Fi, Battery, VPN, Bluetooth and Sound submenus, custom controls and network routing")
+        print("PASS: native settings actions, Wi-Fi, Battery, Keep Awake, VPN, Bluetooth and Sound submenus, custom controls and network routing")
     }
 
     static func spin(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
@@ -586,6 +587,75 @@ extension PanelTests {
     }
 }
 
+extension PanelTests {
+    /// Exercises the Keep Awake submenu against a fake service: no power assertion is ever created.
+    static func sleepChecks() {
+        let suite = "com.rex.myduobar.tests.sleep"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let fake = FakeSleepService()
+        let menu = SleepMenuController(defaults: defaults)
+        menu.service = fake
+        var opened: [SystemSettings.Page] = []
+        menu.onOpenSettings = { opened.append($0) }
+        check(menu.item.submenu === menu.submenu && menu.item.title == "防止休眠" && menu.item.subtitle == "未開啟" && !menu.isOn
+              && menu.item.image != nil, "Keep Awake starts off with its own item")
+
+        menu.menuWillOpen(menu.submenu)
+        check(menu.submenu.items.first?.isSectionHeader == true && menu.submenu.items.first?.title == "防止休眠"
+              && menu.submenu.items[1].view === menu.guardRow && menu.submenu.items.last?.title == "電池設定…",
+              "the submenu has a Keep Awake header, the switch row and Battery Settings")
+        check(menu.durationItems.map(\.title) == ["直到關閉", "30 分鐘", "1 小時", "2 小時", "4 小時"]
+              && menu.durationItems.map(\.state) == [.on, .off, .off, .off, .off] && menu.displayItem?.state == .off,
+              "every duration is listed with the default checked, and the display option is off")
+        let row = menu.guardRow
+        check(!row.toggleSwitch.isOn && row.detailText == "未開啟，Mac 會照設定休眠", "off says the Mac sleeps as configured")
+
+        row.mouseUp(with: NSEvent.mouseEvent(with: .leftMouseUp, location: row.convert(NSPoint(x: 100, y: 20), to: nil),
+                                             modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                                             eventNumber: 0, clickCount: 1, pressure: 0) ?? NSEvent())
+        check(fake.calls == ["start display:false"] && menu.isOn && row.toggleSwitch.isOn && row.detailText == "已開啟 · 直到關閉"
+              && menu.item.subtitle == "已開啟 · 直到關閉" && menu.until == nil, "clicking the row holds the Mac awake until turned off")
+
+        let hour = menu.durationItems[2]
+        hour.target.map { _ = ($0 as? NSObject)?.perform(hour.action, with: hour) }
+        check(menu.until.map { abs($0.timeIntervalSinceNow - 3600) < 5 } == true && row.detailText == "已開啟 · 還有 1 小時 0 分鐘"
+              && menu.durationItems.map(\.state) == [.off, .off, .on, .off, .off] && defaults.integer(forKey: SleepMenuController.minutesKey) == 60,
+              "choosing a duration times the hold and remembers it")
+        let end = menu.until
+        menu.toggleDisplay()
+        check(fake.calls.last == "start display:true" && menu.displayItem?.state == .on && menu.keepsDisplayOn && menu.isOn,
+              "keeping the display on restarts the hold with the display included")
+        check(menu.until == end || menu.until.map { abs($0.timeIntervalSinceNow - 3600) < 5 } == true, "the display option keeps the timing")
+
+        menu.toggle()
+        check(fake.calls.last == "stop" && !menu.isOn && menu.until == nil && row.detailText == "未開啟，Mac 會照設定休眠"
+              && menu.item.subtitle == "未開啟" && !row.toggleSwitch.isOn, "turning it off releases the hold")
+        menu.toggle()
+        check(fake.calls.last == "start display:true" && menu.until != nil, "turning it back on uses the remembered duration and display choice")
+        menu.expire()
+        check(fake.calls.last == "stop" && !menu.isOn, "a timed hold turns itself off when the time is up")
+
+        fake.refuse = true
+        menu.toggle()
+        check(opened == [.battery] && !menu.isOn && !row.toggleSwitch.isOn, "a refused hold opens Battery settings and stays off")
+        fake.refuse = false
+
+        L10n.overrideForTesting(.en)
+        menu.rebuild()
+        check(menu.submenu.items.first?.title == "Keep Awake" && menu.durationItems[0].title == "Until Turned Off"
+              && menu.durationItems[1].title == "30 min" && menu.durationItems[2].title == "1 hr"
+              && menu.displayItem?.title == "Also Keep the Display On" && row.detailText == "Off · Your Mac sleeps as configured",
+              "the Keep Awake submenu follows the app language")
+        check(L10n.keepAwakeRemaining(90) == "On · 1 hr 30 min left" && L10n.keepAwakeRemaining(5) == "On · 5 min left",
+              "remaining time reads in hours and minutes")
+        L10n.overrideForTesting(.zhHant)
+        menu.menuDidClose(menu.submenu)
+        menu.stop()
+    }
+}
+
 final class ActionTarget: NSObject {
     let body: () -> Void
     init(_ body: @escaping () -> Void) { self.body = body }
@@ -655,6 +725,24 @@ final class FakeSoundService: SoundServing, @unchecked Sendable {
             return true
         }
     }
+}
+
+/// Records keep-awake requests for tests without touching power management.
+final class FakeSleepService: SleepGuarding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _calls: [String] = []
+    private var _refuse = false
+
+    var calls: [String] { lock.withLock { _calls } }
+    var refuse: Bool { get { lock.withLock { _refuse } } set { lock.withLock { _refuse = newValue } } }
+
+    func start(keepDisplayOn: Bool) -> Bool {
+        lock.withLock {
+            _calls.append("start display:\(keepDisplayOn)")
+            return !_refuse
+        }
+    }
+    func stop() { lock.withLock { _calls.append("stop") } }
 }
 
 /// In-memory charge limit for tests.
