@@ -122,13 +122,19 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         for item in levelItems { submenu.removeItem(item) }
         guard let anchor = submenu.items.firstIndex(where: { $0.view === limitRow }) else { return }
         for (offset, level) in (state?.levels ?? []).enumerated() {
-            let row = NSMenuItem(title: L10n.chargeLimitLevel(level), action: #selector(chooseLevel(_:)), keyEquivalent: "")
-            row.target = self
+            let title = L10n.chargeLimitLevel(level)
+            let row = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             row.representedObject = NSNumber(value: level)
-            row.indentationLevel = 1
+            // A view, not a plain item, so picking a level keeps the menu open.
+            let choice = ChoiceRowView(width: Self.rowWidth, title: title)
+            choice.onSelect = { [weak self] in self?.setLimit(level) }
+            row.view = choice
             submenu.insertItem(row, at: anchor + 1 + offset)
         }
     }
+
+    /// The level rows' views, in the order macOS offers them.
+    var levelRows: [ChoiceRowView] { levelItems.compactMap { $0.view as? ChoiceRowView } }
 
     /// The level rows, in the order macOS offers them.
     var levelItems: [NSMenuItem] { submenu.items.filter { $0.representedObject is NSNumber } }
@@ -145,8 +151,12 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
                            isOn: active != nil, isEnabled: current?.supported == true && !writing, help: L10n.chargeLimitToggle)
         for row in levelItems {
             let level = (row.representedObject as? NSNumber)?.intValue
-            row.state = level == active ? .on : .off
-            row.isEnabled = current?.supported == true && !writing
+            let enabled = current?.supported == true && !writing
+            row.isEnabled = enabled
+            if let choice = row.view as? ChoiceRowView {
+                choice.isChecked = level == active
+                choice.isEnabled = enabled
+            }
         }
     }
 
@@ -159,11 +169,6 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     @objc private func openBatterySettings() {
         closeMenus()
         onOpenSettings?(.battery)
-    }
-
-    @objc private func chooseLevel(_ sender: NSMenuItem) {
-        guard let level = (sender.representedObject as? NSNumber)?.intValue else { return }
-        setLimit(level)
     }
 
     /// Turns the limit off, or on at the preferred level.

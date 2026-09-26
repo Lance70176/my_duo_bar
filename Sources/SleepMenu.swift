@@ -23,6 +23,7 @@ final class SleepMenuController: NSObject, NSMenuDelegate {
     private let header = NSMenuItem.sectionHeader(title: "")
     private let guardItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let displayChoice = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let displayRow = ChoiceRowView(width: SleepMenuController.rowWidth, title: "")
     private let settings = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let defaults: UserDefaults
     private(set) var isOn = false
@@ -43,15 +44,18 @@ final class SleepMenuController: NSObject, NSMenuDelegate {
         submenu.addItem(header)
         guardItem.view = guardRow
         submenu.addItem(guardItem)
+        // Durations and the display option are views, not plain items, so picking one keeps the menu open.
         for minutes in Self.durations {
-            let choice = NSMenuItem(title: "", action: #selector(chooseDuration(_:)), keyEquivalent: "")
-            choice.target = self
+            let choice = NSMenuItem(title: "", action: nil, keyEquivalent: "")
             choice.representedObject = NSNumber(value: minutes)
-            choice.indentationLevel = 1
+            let row = ChoiceRowView(width: Self.rowWidth, title: "")
+            row.onSelect = { [weak self] in self?.choose(minutes: minutes) }
+            choice.view = row
             submenu.addItem(choice)
         }
         submenu.addItem(.separator())
-        displayChoice.target = self; displayChoice.action = #selector(toggleDisplay)
+        displayRow.onSelect = { [weak self] in self?.toggleDisplay() }
+        displayChoice.view = displayRow
         submenu.addItem(displayChoice)
         submenu.addItem(.separator())
         settings.target = self; settings.action = #selector(openBatterySettings)
@@ -93,15 +97,18 @@ final class SleepMenuController: NSObject, NSMenuDelegate {
         for choice in durationItems {
             let minutes = (choice.representedObject as? NSNumber)?.intValue ?? 0
             choice.title = minutes == 0 ? L10n.untilTurnedOff : L10n.keepAwakeFor(minutes)
+            (choice.view as? ChoiceRowView)?.title = choice.title
         }
         displayChoice.title = L10n.keepDisplayOn
+        displayRow.title = L10n.keepDisplayOn
         settings.title = L10n.batterySettingsMenu
         refreshRows()
     }
 
     /// The duration rows, in the order offered.
     var durationItems: [NSMenuItem] { submenu.items.filter { $0.representedObject is NSNumber } }
-    var displayItem: NSMenuItem? { submenu.items.first { $0.action == #selector(toggleDisplay) } }
+    var durationRows: [ChoiceRowView] { durationItems.compactMap { $0.view as? ChoiceRowView } }
+    var displayItem: NSMenuItem { displayChoice }
 
     /// The status line: off, on until turned off, or on with the time left.
     var detail: String {
@@ -119,9 +126,9 @@ final class SleepMenuController: NSObject, NSMenuDelegate {
         item.setAccessibilityLabel([item.title, item.subtitle].compactMap { $0 }.joined(separator: ", "))
         guardRow.configure(symbol: symbol, title: L10n.keepAwake, detail: detail, isOn: isOn, isEnabled: true, help: L10n.keepAwakeToggle)
         for choice in durationItems {
-            choice.state = (choice.representedObject as? NSNumber)?.intValue == minutes ? .on : .off
+            (choice.view as? ChoiceRowView)?.isChecked = (choice.representedObject as? NSNumber)?.intValue == minutes
         }
-        displayItem?.state = keepsDisplayOn ? .on : .off
+        displayRow.isChecked = keepsDisplayOn
     }
 
     private func closeMenus() {
@@ -135,8 +142,9 @@ final class SleepMenuController: NSObject, NSMenuDelegate {
         onOpenSettings?(.battery)
     }
 
-    @objc private func chooseDuration(_ sender: NSMenuItem) {
-        guard let minutes = (sender.representedObject as? NSNumber)?.intValue else { return }
+    /// Picks a duration and starts (or restarts) the hold with it.
+    func choose(minutes: Int) {
+        guard Self.durations.contains(minutes) else { return }
         defaults.set(minutes, forKey: Self.minutesKey)
         turnOn()
     }

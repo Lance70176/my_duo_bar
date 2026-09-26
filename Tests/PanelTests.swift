@@ -523,8 +523,9 @@ extension PanelTests {
         check(menu.submenu.items.first?.isSectionHeader == true && menu.submenu.items.first?.title == "充電上限"
               && menu.submenu.items[1].view === menu.limitRow && menu.submenu.items.last?.title == "電池設定…",
               "the submenu has a Charge Limit header, the switch row and Battery Settings")
-        check(menu.levelItems.map(\.title) == ["停在 80%", "停在 85%", "停在 90%", "停在 95%"] && menu.levelItems.map(\.state) == [.on, .off, .off, .off],
-              "every level macOS offers is listed with the active one checked")
+        check(menu.levelItems.map(\.title) == ["停在 80%", "停在 85%", "停在 90%", "停在 95%"] && menu.levelRows.map(\.isChecked) == [true, false, false, false]
+              && menu.levelRows.map(\.title) == menu.levelItems.map(\.title) && menu.levelRows.allSatisfy(\.isEnabled),
+              "every level macOS offers is listed as a row with the active one checked")
         check(menu.limitRow.toggleSwitch.isOn && menu.limitRow.detailText == "充到 80% 就停止充電", "the switch is on and names the limit")
 
         let row = menu.limitRow
@@ -534,18 +535,20 @@ extension PanelTests {
         check(!row.toggleSwitch.isOn, "clicking the row turns the switch off at once")
         spin(0.2)
         check(fake.calls == ["disable"] && !row.toggleSwitch.isOn && row.detailText == "未限制，會充到 100%"
-              && menu.levelItems.allSatisfy { $0.state == .off } && changes == 1 && opened.isEmpty,
+              && menu.levelRows.allSatisfy { !$0.isChecked } && changes == 1 && opened.isEmpty,
               "turning the limit off asks macOS to disable it and unchecks every level")
 
         menu.toggleLimit()
         spin(0.2)
-        check(fake.calls.last == "set 80" && row.toggleSwitch.isOn && menu.levelItems[0].state == .on,
+        check(fake.calls.last == "set 80" && row.toggleSwitch.isOn && menu.levelRows[0].isChecked,
               "turning it back on restores the last level")
 
-        let ninety = menu.levelItems[2]
-        ninety.target.map { _ = ($0 as? NSObject)?.perform(ninety.action, with: ninety) }
+        let ninety = menu.levelRows[2]
+        ninety.mouseUp(with: NSEvent.mouseEvent(with: .leftMouseUp, location: ninety.convert(NSPoint(x: 100, y: 12), to: nil),
+                                                modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                                                eventNumber: 0, clickCount: 1, pressure: 0) ?? NSEvent())
         spin(0.2)
-        check(fake.calls.last == "set 90" && menu.levelItems.map(\.state) == [.off, .off, .on, .off] && row.detailText == "充到 90% 就停止充電"
+        check(fake.calls.last == "set 90" && menu.levelRows.map(\.isChecked) == [false, false, true, false] && row.detailText == "充到 90% 就停止充電"
               && defaults.integer(forKey: BatteryMenuController.levelKey) == 90, "choosing a level sets it and remembers it")
         menu.setLimit(nil)
         spin(0.2)
@@ -556,19 +559,19 @@ extension PanelTests {
         fake.refuse = true
         menu.setLimit(85)
         spin(0.2)
-        check(opened == [.battery] && changes == 5 && menu.levelItems.map(\.state) == [.off, .off, .on, .off],
+        check(opened == [.battery] && changes == 5 && menu.levelRows.map(\.isChecked) == [false, false, true, false],
               "a refused change opens Battery settings and keeps the real value")
         fake.refuse = false
 
         fake.setExternally(ChargeLimitState(supported: true, enabled: true, limit: 95, levels: [80, 85, 90, 95]))
         menu.update(status: state)
         spin(0.2)
-        check(menu.levelItems.map(\.state) == [.off, .off, .off, .on] && defaults.integer(forKey: BatteryMenuController.levelKey) == 95,
+        check(menu.levelRows.map(\.isChecked) == [false, false, false, true] && defaults.integer(forKey: BatteryMenuController.levelKey) == 95,
               "a limit chosen in System Settings shows up while the submenu is open and becomes the remembered level")
 
         L10n.overrideForTesting(.en)
         menu.rebuild()
-        check(menu.submenu.items.first?.title == "Charge Limit" && menu.levelItems.first?.title == "Stop at 80%"
+        check(menu.submenu.items.first?.title == "Charge Limit" && menu.levelRows.first?.title == "Stop at 80%"
               && menu.submenu.items.last?.title == "Battery Settings…", "the submenu follows the app language")
         L10n.overrideForTesting(.zhHant)
         menu.submenu.items.last.map { item in _ = (item.target as? NSObject)?.perform(item.action) }
@@ -606,9 +609,10 @@ extension PanelTests {
         check(menu.submenu.items.first?.isSectionHeader == true && menu.submenu.items.first?.title == "防止休眠"
               && menu.submenu.items[1].view === menu.guardRow && menu.submenu.items.last?.title == "電池設定…",
               "the submenu has a Keep Awake header, the switch row and Battery Settings")
-        check(menu.durationItems.map(\.title) == ["直到關閉", "30 分鐘", "1 小時", "2 小時", "4 小時"]
-              && menu.durationItems.map(\.state) == [.on, .off, .off, .off, .off] && menu.displayItem?.state == .off,
-              "every duration is listed with the default checked, and the display option is off")
+        check(menu.durationRows.map(\.title) == ["直到關閉", "30 分鐘", "1 小時", "2 小時", "4 小時"]
+              && menu.durationRows.map(\.isChecked) == [true, false, false, false, false] && !menu.displayRow.isChecked
+              && menu.displayItem.view === menu.displayRow && menu.displayRow.title == "同時保持螢幕不關閉",
+              "every duration is listed as a row with the default checked, and the display option is off")
         let row = menu.guardRow
         check(!row.toggleSwitch.isOn && row.detailText == "未開啟，Mac 會照設定休眠", "off says the Mac sleeps as configured")
 
@@ -618,14 +622,16 @@ extension PanelTests {
         check(fake.calls == ["start display:false"] && menu.isOn && row.toggleSwitch.isOn && row.detailText == "已開啟 · 直到關閉"
               && menu.item.subtitle == "已開啟 · 直到關閉" && menu.until == nil, "clicking the row holds the Mac awake until turned off")
 
-        let hour = menu.durationItems[2]
-        hour.target.map { _ = ($0 as? NSObject)?.perform(hour.action, with: hour) }
+        let hour = menu.durationRows[2]
+        hour.mouseUp(with: NSEvent.mouseEvent(with: .leftMouseUp, location: hour.convert(NSPoint(x: 100, y: 12), to: nil),
+                                              modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                                              eventNumber: 0, clickCount: 1, pressure: 0) ?? NSEvent())
         check(menu.until.map { abs($0.timeIntervalSinceNow - 3600) < 5 } == true && row.detailText == "已開啟 · 還有 1 小時 0 分鐘"
-              && menu.durationItems.map(\.state) == [.off, .off, .on, .off, .off] && defaults.integer(forKey: SleepMenuController.minutesKey) == 60,
+              && menu.durationRows.map(\.isChecked) == [false, false, true, false, false] && defaults.integer(forKey: SleepMenuController.minutesKey) == 60,
               "choosing a duration times the hold and remembers it")
         let end = menu.until
-        menu.toggleDisplay()
-        check(fake.calls.last == "start display:true" && menu.displayItem?.state == .on && menu.keepsDisplayOn && menu.isOn,
+        menu.displayRow.onSelect?()
+        check(fake.calls.last == "start display:true" && menu.displayRow.isChecked && menu.keepsDisplayOn && menu.isOn,
               "keeping the display on restarts the hold with the display included")
         check(menu.until == end || menu.until.map { abs($0.timeIntervalSinceNow - 3600) < 5 } == true, "the display option keeps the timing")
 
@@ -644,9 +650,9 @@ extension PanelTests {
 
         L10n.overrideForTesting(.en)
         menu.rebuild()
-        check(menu.submenu.items.first?.title == "Keep Awake" && menu.durationItems[0].title == "Until Turned Off"
-              && menu.durationItems[1].title == "30 min" && menu.durationItems[2].title == "1 hr"
-              && menu.displayItem?.title == "Also Keep the Display On" && row.detailText == "Off · Your Mac sleeps as configured",
+        check(menu.submenu.items.first?.title == "Keep Awake" && menu.durationRows[0].title == "Until Turned Off"
+              && menu.durationRows[1].title == "30 min" && menu.durationRows[2].title == "1 hr"
+              && menu.displayRow.title == "Also Keep the Display On" && row.detailText == "Off · Your Mac sleeps as configured",
               "the Keep Awake submenu follows the app language")
         check(L10n.keepAwakeRemaining(90) == "On · 1 hr 30 min left" && L10n.keepAwakeRemaining(5) == "On · 5 min left",
               "remaining time reads in hours and minutes")

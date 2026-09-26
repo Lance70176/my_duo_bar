@@ -247,3 +247,75 @@ class SwitchRowView: NSView {
         onToggle?(); return true
     }
 }
+
+/// A row that looks like a native menu item, a checkmark and a title, but is a view: choosing it keeps the
+/// menu open, so a list of options can be tried without reopening the menu each time.
+final class ChoiceRowView: NSView {
+    static let height: CGFloat = 26
+    var onSelect: (() -> Void)?
+    private let check = NSImageView()
+    private let titleField = NSTextField(labelWithString: "")
+    override var allowsVibrancy: Bool { true }
+
+    var isChecked = false {
+        didSet { check.isHidden = !isChecked; setAccessibilityValue(isChecked) }
+    }
+    var isEnabled = true {
+        didSet {
+            titleField.textColor = isEnabled ? .labelColor : .tertiaryLabelColor
+            check.contentTintColor = isEnabled ? .labelColor : .tertiaryLabelColor
+            needsDisplay = true
+        }
+    }
+    var title: String {
+        get { titleField.stringValue }
+        set { titleField.stringValue = newValue; setAccessibilityLabel(newValue) }
+    }
+
+    init(width: CGFloat, title: String) {
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: Self.height))
+        check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 11, weight: .bold))
+        check.contentTintColor = .labelColor
+        check.isHidden = true
+        titleField.font = .systemFont(ofSize: 13)
+        titleField.lineBreakMode = .byTruncatingTail
+        for view in [check, titleField] as [NSView] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+        // The title lines up with the switch rows' titles; the checkmark sits in the badge column.
+        NSLayoutConstraint.activate([
+            check.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 27),
+            check.centerYAnchor.constraint(equalTo: centerYAnchor),
+            check.widthAnchor.constraint(equalToConstant: 14),
+            titleField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 47),
+            titleField.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            titleField.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+        self.title = title
+        setAccessibilityElement(true)
+        setAccessibilityRole(.checkBox)
+        check.setAccessibilityElement(false)
+        titleField.setAccessibilityElement(false)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
+    override func draw(_ dirtyRect: NSRect) {
+        if isEnabled, enclosingMenuItem?.isHighlighted == true {
+            NSColor.labelColor.withAlphaComponent(0.1).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 1), xRadius: 6, yRadius: 6).fill()
+        }
+        super.draw(dirtyRect)
+    }
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {
+        guard isEnabled, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onSelect?()
+    }
+    override func accessibilityPerformPress() -> Bool {
+        guard isEnabled else { return false }
+        onSelect?(); return true
+    }
+}
