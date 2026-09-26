@@ -18,6 +18,9 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     var service: ChargeLimitServing = SystemChargeLimitService()
 
     let limitRow = SwitchRowView(width: BatteryMenuController.rowWidth)
+    private let header = NSMenuItem.sectionHeader(title: "")
+    private let limitItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let settings = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let defaults: UserDefaults
     private let worker = DispatchQueue(label: "com.rex.myduobar.battery", qos: .userInitiated)
     private(set) var state: ChargeLimitState?
@@ -32,6 +35,13 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         submenu.autoenablesItems = false
         item.submenu = submenu
         limitRow.onToggle = { [weak self] in self?.toggleLimit() }
+        // Items are created once: a view moved to a new menu item is no longer drawn.
+        submenu.addItem(header)
+        limitItem.view = limitRow
+        submenu.addItem(limitItem)
+        submenu.addItem(.separator())
+        settings.target = self; settings.action = #selector(openBatterySettings)
+        submenu.addItem(settings)
         update(status: SystemStatus())
     }
 
@@ -98,22 +108,16 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         refreshRows()
     }
 
+    /// Re-titles every row in the current language, rebuilds the level rows and refreshes their state.
     func rebuild() {
-        submenu.removeAllItems()
-        submenu.addItem(NSMenuItem.sectionHeader(title: L10n.chargeLimit))
-        let limit = NSMenuItem(title: L10n.chargeLimit, action: nil, keyEquivalent: "")
-        limit.view = limitRow
-        submenu.addItem(limit)
-        submenu.addItem(.separator())
-        let settings = NSMenuItem(title: L10n.batterySettingsMenu, action: #selector(openBatterySettings), keyEquivalent: "")
-        settings.target = self
-        submenu.addItem(settings)
+        header.title = L10n.chargeLimit
+        limitItem.title = L10n.chargeLimit
+        settings.title = L10n.batterySettingsMenu
         rebuildLevels()
         refreshRows()
     }
 
-    /// Replaces the level rows in place. The switch row keeps its item: a view removed from an open menu
-    /// and added back is no longer drawn, which left a blank space above the levels.
+    /// Replaces the level rows in place; the switch row keeps its item.
     private func rebuildLevels() {
         for item in levelItems { submenu.removeItem(item) }
         guard let anchor = submenu.items.firstIndex(where: { $0.view === limitRow }) else { return }

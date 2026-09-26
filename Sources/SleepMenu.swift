@@ -20,6 +20,10 @@ final class SleepMenuController: NSObject, NSMenuDelegate {
     var service: SleepGuarding = SystemSleepService()
 
     let guardRow = SwitchRowView(width: SleepMenuController.rowWidth)
+    private let header = NSMenuItem.sectionHeader(title: "")
+    private let guardItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let displayChoice = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let settings = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let defaults: UserDefaults
     private(set) var isOn = false
     /// When a timed hold ends; nil while off or while holding until turned off.
@@ -35,6 +39,23 @@ final class SleepMenuController: NSObject, NSMenuDelegate {
         submenu.autoenablesItems = false
         item.submenu = submenu
         guardRow.onToggle = { [weak self] in self?.toggle() }
+        // Items are created once: a view moved to a new menu item is no longer drawn.
+        submenu.addItem(header)
+        guardItem.view = guardRow
+        submenu.addItem(guardItem)
+        for minutes in Self.durations {
+            let choice = NSMenuItem(title: "", action: #selector(chooseDuration(_:)), keyEquivalent: "")
+            choice.target = self
+            choice.representedObject = NSNumber(value: minutes)
+            choice.indentationLevel = 1
+            submenu.addItem(choice)
+        }
+        submenu.addItem(.separator())
+        displayChoice.target = self; displayChoice.action = #selector(toggleDisplay)
+        submenu.addItem(displayChoice)
+        submenu.addItem(.separator())
+        settings.target = self; settings.action = #selector(openBatterySettings)
+        submenu.addItem(settings)
         rebuild()
     }
 
@@ -65,28 +86,16 @@ final class SleepMenuController: NSObject, NSMenuDelegate {
         ticker = nil
     }
 
+    /// Re-titles every row in the current language and refreshes its state.
     func rebuild() {
-        submenu.removeAllItems()
-        submenu.addItem(NSMenuItem.sectionHeader(title: L10n.keepAwake))
-        let row = NSMenuItem(title: L10n.keepAwake, action: nil, keyEquivalent: "")
-        row.view = guardRow
-        submenu.addItem(row)
-        for minutes in Self.durations {
-            let choice = NSMenuItem(title: minutes == 0 ? L10n.untilTurnedOff : L10n.keepAwakeFor(minutes),
-                                    action: #selector(chooseDuration(_:)), keyEquivalent: "")
-            choice.target = self
-            choice.representedObject = NSNumber(value: minutes)
-            choice.indentationLevel = 1
-            submenu.addItem(choice)
+        header.title = L10n.keepAwake
+        guardItem.title = L10n.keepAwake
+        for choice in durationItems {
+            let minutes = (choice.representedObject as? NSNumber)?.intValue ?? 0
+            choice.title = minutes == 0 ? L10n.untilTurnedOff : L10n.keepAwakeFor(minutes)
         }
-        submenu.addItem(.separator())
-        let display = NSMenuItem(title: L10n.keepDisplayOn, action: #selector(toggleDisplay), keyEquivalent: "")
-        display.target = self
-        submenu.addItem(display)
-        submenu.addItem(.separator())
-        let settings = NSMenuItem(title: L10n.batterySettingsMenu, action: #selector(openBatterySettings), keyEquivalent: "")
-        settings.target = self
-        submenu.addItem(settings)
+        displayChoice.title = L10n.keepDisplayOn
+        settings.title = L10n.batterySettingsMenu
         refreshRows()
     }
 
