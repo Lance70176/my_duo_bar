@@ -163,6 +163,7 @@ if CommandLine.arguments.contains("--diagnose") {
     let status = SystemStatus(battery: SystemReaders.battery(),
                               wifi: SystemReaders.wifi(client: .shared(), route: .unknown),
                               vpn: SystemReaders.vpn(), audio: SystemReaders.audio(), focus: SystemReaders.focus())
+    let health = BatteryHealthService.read()
     let report: [String: Any] = [
         "batteryPresent": status.battery.present,
         "batteryCharging": status.battery.charging,
@@ -171,6 +172,9 @@ if CommandLine.arguments.contains("--diagnose") {
         "powerRingGreen": status.battery.connectedToPower && !status.battery.lowPowerMode,
         "batteryPercent": status.battery.percent as Any? ?? NSNull(),
         "chargeLimit": status.battery.chargeLimit as Any? ?? NSNull(),
+        "batteryMaximumCapacity": health?.maximumCapacity as Any? ?? NSNull(),
+        "batteryCondition": health.map { "\($0.condition)" } as Any? ?? NSNull(),
+        "batteryCycleCount": health?.cycleCount as Any? ?? NSNull(),
         "wifiAssociated": status.wifi.associated,
         "wifiNameAvailable": status.wifi.ssid != nil,
         "vpnConfirmedCount": status.vpn.names.count,

@@ -1,13 +1,15 @@
 import AppKit
 
-/// The Battery item in the status menu and its submenu: the charge limit switch, the levels macOS offers
-/// and Battery Settings. The limit is the system's own (System Settings → Battery), so it stays in effect
+/// The Battery item in the status menu and its submenu: the charge limit switch, the levels macOS offers,
+/// the battery's health and Battery Settings. The limit is the system's own (System Settings → Battery), so it stays in effect
 /// after this app quits and shows the same value everywhere.
 @MainActor
 final class BatteryMenuController: NSObject, NSMenuDelegate {
     static let rowWidth: CGFloat = 290
     static let levelKey = "chargeLimitLevel"
     static let defaultLevel = 80
+    /// The health is re-read at most this often; it changes slowly and the read runs a helper process.
+    static let healthInterval: TimeInterval = 300
 
     let item = NSMenuItem()
     let submenu = NSMenu()
@@ -16,12 +18,21 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     var onChargeLimitChanged: (() -> Void)?
     /// Runs the PowerUI calls. Replaceable in tests so the Mac's real limit is never touched.
     var service: ChargeLimitServing = SystemChargeLimitService()
+    /// Reads the health figures. Replaceable in tests so no helper process runs.
+    var healthService: BatteryHealthReading = SystemBatteryHealthService()
 
     let limitRow = SwitchRowView(width: BatteryMenuController.rowWidth)
     private let header = NSMenuItem.sectionHeader(title: "")
     private let limitItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let healthHeader = NSMenuItem.sectionHeader(title: "")
+    private let capacityItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let cyclesItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let healthSeparator = NSMenuItem.separator()
     private let settings = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let defaults: UserDefaults
+    private(set) var health: BatteryHealth?
+    private var healthLoaded = false
+    private var healthReadAt: Date?
     private let worker = DispatchQueue(label: "com.rex.myduobar.battery", qos: .userInitiated)
     private(set) var state: ChargeLimitState?
     private var battery = BatteryState()
@@ -40,6 +51,13 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         limitItem.view = limitRow
         submenu.addItem(limitItem)
         submenu.addItem(.separator())
+        // Read-only figures, grey like the power source line in the system's own battery menu.
+        capacityItem.isEnabled = false
+        cyclesItem.isEnabled = false
+        submenu.addItem(healthHeader)
+        submenu.addItem(capacityItem)
+        submenu.addItem(cyclesItem)
+        submenu.addItem(healthSeparator)
         settings.target = self; settings.action = #selector(openBatterySettings)
         submenu.addItem(settings)
         update(status: SystemStatus())
@@ -78,13 +96,14 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     }
 
     /// Called when the status menu opens, so the rows are current before the submenu appears.
-    func prepare() { reload() }
+    func prepare() { reload(); reloadHealth() }
 
     func menuWillOpen(_ menu: NSMenu) {
         guard menu === submenu else { return }
         submenuOpen = true
         rebuild()
         reload()
+        reloadHealth()
     }
     func menuDidClose(_ menu: NSMenu) {
         if menu === submenu { submenuOpen = false }
@@ -97,6 +116,28 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.apply(fresh) } }
         }
     }
+
+    /// Re-reads the health unless the last read is recent. Runs on its own queue so a slow helper
+    /// never delays the charge limit rows.
+    func reloadHealth(force: Bool = false) {
+        if !force, let healthReadAt, Date().timeIntervalSince(healthReadAt) < Self.healthInterval { return }
+        healthReadAt = Date()
+        let service = healthService
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let fresh = service.read()
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.apply(health: fresh) } }
+        }
+    }
+
+    /// Takes a fresh health read; nil means the Mac has no built-in battery and the section hides.
+    func apply(health fresh: BatteryHealth?) {
+        health = fresh
+        healthLoaded = true
+        refreshRows()
+    }
+
+    /// The health rows: maximum capacity and cycle count.
+    var healthItems: [NSMenuItem] { [capacityItem, cyclesItem] }
 
     /// Takes a fresh read. A write in progress owns the rows until it settles.
     func apply(_ fresh: ChargeLimitState) {
@@ -112,6 +153,7 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     func rebuild() {
         header.title = L10n.chargeLimit
         limitItem.title = L10n.chargeLimit
+        healthHeader.title = L10n.batteryHealth
         settings.title = L10n.batterySettingsMenu
         rebuildLevels()
         refreshRows()
@@ -158,6 +200,11 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
                 choice.isEnabled = enabled
             }
         }
+        let noBattery = healthLoaded && health == nil
+        for item in [healthHeader, capacityItem, healthSeparator] { item.isHidden = noBattery }
+        capacityItem.title = health?.capacityLine ?? L10n.reading
+        cyclesItem.title = health?.cycleLine ?? ""
+        cyclesItem.isHidden = noBattery || health == nil
     }
 
     private func closeMenus() {

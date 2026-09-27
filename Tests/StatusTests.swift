@@ -119,8 +119,31 @@ import Foundation
               && ChargeLimitState(supported: true, enabled: false, limit: 100).activeLimit == nil
               && ChargeLimitState(supported: false, enabled: true, limit: 80).activeLimit == nil,
               "the active limit needs support and an enabled limit below 100")
+        let registry: [String: Any] = ["BatteryInstalled": true, "CycleCount": 239, "DesignCycleCount9C": 1000,
+                                       "BatteryData": ["DesignCapacity": 6075, "NominalChargeCapacity": 5191]]
+        let estimated = BatteryHealthService.parse(registry: registry)
+        check(estimated == BatteryHealth(maximumCapacity: 85, condition: .unknown, cycleCount: 239, designCycleCount: 1000),
+              "the registry gives the cycle counts and a capacity estimate from the pack's own figures")
+        check(BatteryHealthService.parse(registry: ["BatteryInstalled": false]) == nil, "no installed battery means no health")
+        let profile = Data("""
+        {"SPPowerDataType":[{"_name":"spbattery_information","sppower_battery_health_info":{"sppower_battery_cycle_count":239,\
+        "sppower_battery_health":"Good","sppower_battery_health_maximum_capacity":"84%"}},{"_name":"sppower_ac_charger_information"}]}
+        """.utf8)
+        let profiled = BatteryHealthService.parse(profile: profile)
+        check(profiled == BatteryHealth(maximumCapacity: 84, condition: .normal, cycleCount: 239, designCycleCount: nil),
+              "the profiler gives macOS's own maximum capacity and condition")
+        check(BatteryHealthService.parse(profile: Data("{}".utf8)) == nil, "a profile without a battery gives nil")
+        var health = estimated!
+        health.merge(profiled!)
+        check(health.maximumCapacity == 84 && health.condition == .normal && health.cycleCount == 239 && health.designCycleCount == 1000,
+              "the profiler's figures win and the registry keeps the design cycle count")
+        check(health.capacityLine == "最大容量 84% · 正常" && health.cycleLine == "循環次數 239（設計 1000）", "Chinese health lines")
+        var worn = health; worn.condition = .serviceRecommended; worn.designCycleCount = nil
+        check(worn.capacityLine == "最大容量 84% · 建議維修" && worn.cycleLine == "循環次數 239", "service recommended and no design count")
+        check(BatteryHealth().capacityLine == "讀取中" && BatteryHealth().cycleLine == "讀取中", "unknown health reads as reading")
 
         L10n.overrideForTesting(.en)
+        check(health.capacityLine == "Maximum Capacity 84% · Normal" && health.cycleLine == "Cycle Count 239 of 1000", "English health lines")
         check(wifi.signalQuality == "Strong Signal", "English signal wording")
         check(wifi.title == "Connected to Wi-Fi", "English redacted SSID")
         check(BatteryState().title == "External Power", "English desktop power")
@@ -135,6 +158,7 @@ import Foundation
         check(wifi.signalQuality == "電波良好", "Japanese signal wording")
         check(BatteryState().title == "外部電源", "Japanese desktop power")
         check(BatteryState(present: true, percent: 87, externalPower: true, chargeLimit: 80).detail == "上限 80% まで充電済み", "Japanese charge limit")
+        check(health.capacityLine == "最大容量 84% · 正常" && health.cycleLine == "充放電回数 239（設計 1000）", "Japanese health lines")
         check(StatusGlyph.focus.title == "集中モード" && FocusState.active.title == "オン", "Japanese dot and Focus titles")
         check(AudioState(muted: true).soundTitle == "消音中", "Japanese mute wording")
 

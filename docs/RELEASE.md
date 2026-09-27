@@ -1,3 +1,8 @@
+# MyDuoBar 1.12.0
+
+- 電池子選單新增「電池健康度」區塊：最大容量（與「系統設定 → 電池 → 電池健康度」相同的數字）、狀態（正常或建議維修）與循環次數（含設計循環次數）。數值來自 IORegistry 的電池項目與系統內建的 `system_profiler`，最多每五分鐘讀一次；沒有內建電池時隱藏。
+- `--diagnose` 加入 batteryMaximumCapacity、batteryCondition 與 batteryCycleCount。
+
 # MyDuoBar 1.11.0
 
 - 電池子選單的充電上限檔位、「防止休眠」的時長與「同時保持螢幕不關閉」改為自繪的勾選列：點了只更新勾選與狀態，選單保持開啟，不必每改一次就重新展開。

@@ -500,6 +500,8 @@ extension PanelTests {
         let fake = FakeChargeLimitService(ChargeLimitState(supported: true, enabled: true, limit: 80, levels: [80, 85, 90, 95]))
         let menu = BatteryMenuController(defaults: defaults)
         menu.service = fake
+        let healthFake = FakeBatteryHealthService(BatteryHealth(maximumCapacity: 84, condition: .normal, cycleCount: 239, designCycleCount: 1000))
+        menu.healthService = healthFake
         var opened: [SystemSettings.Page] = []
         var changes = 0
         menu.onOpenSettings = { opened.append($0) }
@@ -527,6 +529,16 @@ extension PanelTests {
               && menu.levelRows.map(\.title) == menu.levelItems.map(\.title) && menu.levelRows.allSatisfy(\.isEnabled),
               "every level macOS offers is listed as a row with the active one checked")
         check(menu.limitRow.toggleSwitch.isOn && menu.limitRow.detailText == "充到 80% 就停止充電", "the switch is on and names the limit")
+        check(menu.healthItems.map(\.title) == ["最大容量 84% · 正常", "循環次數 239（設計 1000）"]
+              && menu.healthItems.allSatisfy { !$0.isEnabled && !$0.isHidden }
+              && menu.submenu.items.contains { $0.isSectionHeader && $0.title == "電池健康度" },
+              "the submenu has a Battery Health section with the capacity and cycle count as read-only rows")
+        menu.menuWillOpen(menu.submenu)
+        spin(0.2)
+        check(healthFake.reads == 1, "reopening soon after keeps the cached health instead of running the helper again")
+        menu.reloadHealth(force: true)
+        spin(0.2)
+        check(healthFake.reads == 2 && menu.health?.cycleCount == 239, "a forced reload reads the health again")
 
         let row = menu.limitRow
         row.mouseUp(with: NSEvent.mouseEvent(with: .leftMouseUp, location: row.convert(NSPoint(x: 100, y: 20), to: nil),
@@ -572,6 +584,8 @@ extension PanelTests {
         L10n.overrideForTesting(.en)
         menu.rebuild()
         check(menu.submenu.items.first?.title == "Charge Limit" && menu.levelRows.first?.title == "Stop at 80%"
+              && menu.submenu.items.contains { $0.isSectionHeader && $0.title == "Battery Health" }
+              && menu.healthItems.map(\.title) == ["Maximum Capacity 84% · Normal", "Cycle Count 239 of 1000"]
               && menu.submenu.items.last?.title == "Battery Settings…", "the submenu follows the app language")
         L10n.overrideForTesting(.zhHant)
         menu.submenu.items.last.map { item in _ = (item.target as? NSObject)?.perform(item.action) }
@@ -580,10 +594,13 @@ extension PanelTests {
 
         let unsupported = BatteryMenuController(defaults: defaults)
         unsupported.service = FakeChargeLimitService(.unsupported)
+        unsupported.healthService = FakeBatteryHealthService(nil)
         unsupported.menuWillOpen(unsupported.submenu)
         spin(0.2)
         check(!unsupported.limitRow.toggleSwitch.isEnabled && unsupported.limitRow.detailText == "此 Mac 或此版 macOS 不提供充電上限"
               && unsupported.levelItems.isEmpty, "without the system charge limit the switch is disabled and says why")
+        check(unsupported.healthItems.allSatisfy(\.isHidden) && !unsupported.submenu.items.contains { $0.isSectionHeader && $0.title == "電池健康度" && !$0.isHidden },
+              "without a built-in battery the health section is hidden")
         unsupported.toggleLimit()
         spin(0.1)
         unsupported.menuDidClose(unsupported.submenu)
@@ -752,6 +769,15 @@ final class FakeSleepService: SleepGuarding, @unchecked Sendable {
 }
 
 /// In-memory charge limit for tests.
+final class FakeBatteryHealthService: BatteryHealthReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private let health: BatteryHealth?
+    private var _reads = 0
+    init(_ health: BatteryHealth?) { self.health = health }
+    var reads: Int { lock.withLock { _reads } }
+    func read() -> BatteryHealth? { lock.withLock { _reads += 1; return health } }
+}
+
 final class FakeChargeLimitService: ChargeLimitServing, @unchecked Sendable {
     private let lock = NSLock()
     private var _state: ChargeLimitState

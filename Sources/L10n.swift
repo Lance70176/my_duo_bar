@@ -130,6 +130,16 @@ enum L10n {
     static var chargeLimitToggle: String { pick("切換充電上限", "Turn the charge limit on or off", "充電上限を切り替え") }
     static var batterySettingsMenu: String { pick("電池設定…", "Battery Settings…", "バッテリー設定…") }
 
+    // Battery health section
+    static var batteryHealth: String { pick("電池健康度", "Battery Health", "バッテリーの状態") }
+    static func maximumCapacity(_ percent: Int) -> String { pick("最大容量 \(percent)%", "Maximum Capacity \(percent)%", "最大容量 \(percent)%") }
+    static var conditionNormal: String { pick("正常", "Normal", "正常") }
+    static var conditionServiceRecommended: String { pick("建議維修", "Service Recommended", "修理サービス推奨") }
+    static func cycleCount(_ count: Int, design: Int?) -> String {
+        guard let design else { return pick("循環次數 \(count)", "Cycle Count \(count)", "充放電回数 \(count)") }
+        return pick("循環次數 \(count)（設計 \(design)）", "Cycle Count \(count) of \(design)", "充放電回数 \(count)（設計 \(design)）")
+    }
+
     // MARK: Keep awake submenu
     static var keepAwake: String { pick("防止休眠", "Keep Awake", "スリープ防止") }
     static var keepAwakeIndefinite: String { pick("已開啟 · 直到關閉", "On · Until turned off", "オン · オフにするまで") }
