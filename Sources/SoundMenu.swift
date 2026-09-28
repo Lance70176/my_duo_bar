@@ -28,10 +28,15 @@ final class SoundMenuController: NSObject, NSMenuDelegate {
     private(set) var output: SoundOutput?
     private(set) var devices: [AudioOutputDevice]?
     private(set) var inputs: [AudioInputDevice]?
+    // Items are created once: a view moved to a new menu item is no longer drawn.
+    private let header = NSMenuItem.sectionHeader(title: "")
+    private let volumeItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let muteItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     /// The Output header; device rows sit right after it and are replaced without touching the slider.
-    private var outputHeader: NSMenuItem?
+    private let outputHeader = NSMenuItem.sectionHeader(title: "")
     /// The Input header; input rows sit right after it and are replaced on their own.
-    private var inputHeader: NSMenuItem?
+    private let inputHeader = NSMenuItem.sectionHeader(title: "")
+    private let settings = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private var submenuOpen = false
     private var lastLocalChange: Date?
     private var settleGeneration = 0
@@ -48,6 +53,19 @@ final class SoundMenuController: NSObject, NSMenuDelegate {
         volumeRow.slider.target = self
         volumeRow.slider.action = #selector(volumeSliderMoved)
         muteRow.onToggle = { [weak self] in self?.toggleMute() }
+        submenu.addItem(header)
+        volumeItem.view = volumeRow
+        submenu.addItem(volumeItem)
+        muteItem.view = muteRow
+        submenu.addItem(muteItem)
+        submenu.addItem(.separator())
+        submenu.addItem(outputHeader)
+        submenu.addItem(.separator())
+        submenu.addItem(inputHeader)
+        submenu.addItem(.separator())
+        settings.target = self; settings.action = #selector(openSoundSettings)
+        submenu.addItem(settings)
+        rebuild()
         update(status: SystemStatus())
     }
 
@@ -114,27 +132,14 @@ final class SoundMenuController: NSObject, NSMenuDelegate {
             || lastLocalChange.map { Date().timeIntervalSince($0) < Self.settleTime } == true
     }
 
+    /// Re-titles every row in the current language and rebuilds the device rows; the slider and mute row keep their items.
     func rebuild() {
-        submenu.removeAllItems()
-        submenu.addItem(NSMenuItem.sectionHeader(title: L10n.sound))
-        let volume = NSMenuItem(title: L10n.volume, action: nil, keyEquivalent: "")
-        volume.view = volumeRow
-        submenu.addItem(volume)
-        let mute = NSMenuItem(title: L10n.mute, action: nil, keyEquivalent: "")
-        mute.view = muteRow
-        submenu.addItem(mute)
-        submenu.addItem(.separator())
-        let header = NSMenuItem.sectionHeader(title: L10n.outputDevices)
-        outputHeader = header
-        submenu.addItem(header)
-        submenu.addItem(.separator())
-        let input = NSMenuItem.sectionHeader(title: L10n.inputDevices)
-        inputHeader = input
-        submenu.addItem(input)
-        submenu.addItem(.separator())
-        let settings = NSMenuItem(title: L10n.soundSettingsMenu, action: #selector(openSoundSettings), keyEquivalent: "")
-        settings.target = self
-        submenu.addItem(settings)
+        header.title = L10n.sound
+        volumeItem.title = L10n.volume
+        muteItem.title = L10n.mute
+        outputHeader.title = L10n.outputDevices
+        inputHeader.title = L10n.inputDevices
+        settings.title = L10n.soundSettingsMenu
         refreshRows()
         rebuildDeviceRows()
         rebuildInputRows()
@@ -158,7 +163,7 @@ final class SoundMenuController: NSObject, NSMenuDelegate {
 
     /// Replaces only the device rows, so the slider and mute row keep their views while a drag is in progress.
     private func rebuildDeviceRows() {
-        guard let outputHeader, let start = submenu.items.firstIndex(of: outputHeader) else { return }
+        guard let start = submenu.items.firstIndex(of: outputHeader) else { return }
         for item in submenu.items where item.tag == Self.deviceRowTag { submenu.removeItem(item) }
         var rows: [NSMenuItem] = []
         if let devices {
@@ -237,7 +242,7 @@ final class SoundMenuController: NSObject, NSMenuDelegate {
 
     /// Replaces only the input rows; the output rows and the slider are left alone.
     private func rebuildInputRows() {
-        guard let inputHeader, let start = submenu.items.firstIndex(of: inputHeader) else { return }
+        guard let start = submenu.items.firstIndex(of: inputHeader) else { return }
         for item in submenu.items where item.tag == Self.inputRowTag { submenu.removeItem(item) }
         var rows: [NSMenuItem] = []
         if let inputs {

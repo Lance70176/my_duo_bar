@@ -204,6 +204,13 @@ extension PanelTests {
               "the submenu has a header, the slider, the mute row below it and Sound Settings")
         check(sound.volumeRow.slider.value == 0.5 && sound.volumeRow.levelText == "50%" && sound.volumeRow.deviceText == "MacBook Pro 喇叭",
               "the slider shows the output's volume")
+        let volumeItem = sound.submenu.items[1], muteItem = sound.submenu.items[2]
+        sound.menuDidClose(sound.submenu)
+        sound.menuWillOpen(sound.submenu)
+        spin(0.2)
+        check(sound.submenu.items[1] === volumeItem && sound.submenu.items[2] === muteItem
+              && volumeItem.view === sound.volumeRow && muteItem.view === sound.muteRow,
+              "reopening keeps the slider and mute rows on their original items so they stay drawn")
         check(!sound.muteRow.toggleSwitch.isOn && sound.muteRow.symbolName == "speaker.wave.2.fill" && sound.muteRow.detailText == "未靜音",
               "the mute row shows a speaker and its switch is off")
 
