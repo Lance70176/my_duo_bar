@@ -152,11 +152,13 @@ enum L10n {
     }
     static func powerBatteryLegend(_ value: Double?) -> String {
         let text = value.map { String(format: "%+.1f W", $0) } ?? "—"
-        return pick("電池 \(text)", "Battery \(text)", "バッテリー \(text)")
+        return pick("充入 \(text)", "Charge \(text)", "充電 \(text)")
+    }
+    static func powerLevelLegend(_ percent: Int?) -> String {
+        let text = percent.map { "\($0)%" } ?? "—"
+        return pick("電量 \(text)", "Level \(text)", "残量 \(text)")
     }
     static var powerChartTitle: String { pick("功率變化", "Power Over Time", "電力の推移") }
-    static func powerChartHoursAgo(_ hours: Int) -> String { pick("\(hours) 小時前", "\(hours) hr ago", "\(hours) 時間前") }
-    static var powerChartNow: String { pick("現在", "Now", "現在") }
     static var powerChartEmpty: String { pick("尚無記錄", "No readings yet", "記録なし") }
     static func powerChartRated(_ watts: Int) -> String { pick("上限 \(watts) W", "Max \(watts) W", "上限 \(watts) W") }
     static var openPowerLog: String { pick("開啟功率記錄檔…", "Open Power Log…", "電力ログを開く…") }

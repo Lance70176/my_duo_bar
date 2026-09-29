@@ -530,6 +530,14 @@ extension PanelTests {
         check(menu.powerItems[0].title == "未接上電源轉接器" && menu.powerItems[1].isHidden
               && menu.powerItems[2].title == "電池 +0.0 W · 系統 15.0 W" && menu.chart.samples.count == 2,
               "unplugged, the section says there is no adapter and the chart keeps its history")
+        let chart = menu.chart
+        check(chart.sample(atX: chart.plot.maxX) == chart.samples.last && chart.sample(atX: chart.plot.minX) == nil,
+              "pointing at the chart finds the reading at that time, and nothing where there was no reading")
+        chart.hoverX = chart.plot.maxX
+        check(chart.hoverX != nil && L10n.powerLevelLegend(87) == "電量 87%" && L10n.powerBatteryLegend(24.2) == "充入 +24.2 W"
+              && PowerChartView.clock(Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 30, hour: 0, minute: 20))!) == "00:20",
+              "the crosshair legend names the level and charge power, and times read as a clock")
+        chart.hoverX = nil
         check(menu.healthItems.map(\.title) == ["最大容量 84% · 正常", "循環次數 239（設計 1000）"]
               && menu.healthItems.allSatisfy { !$0.isEnabled && !$0.isHidden }
               && menu.submenu.items.contains { $0.isSectionHeader && $0.title == "電池健康度" },
