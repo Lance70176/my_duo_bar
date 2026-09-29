@@ -593,7 +593,14 @@ extension PanelTests {
         spin(0.2)
         check(menu.limitRow.toggleSwitch.isOn && menu.limitRow.detailText == "其他 App 已暫停充電，停在 24%"
               && menu.levelRows.allSatisfy { !$0.isChecked } && defaults.integer(forKey: BatteryMenuController.levelKey) == 95,
-              "a limit pinned by another app is shown as paused and is not remembered as a level")
+              "a limit another app pinned at the current level is shown as paused and is not remembered as a level")
+        fake.setExternally(ChargeLimitState(supported: true, enabled: true, limit: 79, levels: [80, 85, 90, 95]))
+        var low = state
+        low.battery.percent = 29
+        menu.update(status: low)
+        spin(0.2)
+        check(menu.limitRow.detailText == "由其他 App 設定，充到 79% 停止" && menu.levelRows.allSatisfy { !$0.isChecked },
+              "another app's limit above the current level is named as set elsewhere, not paused")
         fake.setExternally(ChargeLimitState(supported: true, enabled: true, limit: 95, levels: [80, 85, 90, 95]))
         menu.update(status: state)
         spin(0.2)

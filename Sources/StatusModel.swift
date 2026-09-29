@@ -28,8 +28,13 @@ struct BatteryState: Equatable {
     var lowPowerMode = false
     /// The system charge limit in effect (System Settings → Battery), or nil when it is off or unavailable.
     var chargeLimit: Int?
-    /// The limit is not one macOS offers: another app has paused charging through it.
-    var chargePausedElsewhere = false
+    /// The limit is not one macOS offers: another app set it.
+    var chargeLimitSetElsewhere = false
+    /// Another app pinned the limit at or below the current level, which pauses charging.
+    var chargePausedElsewhere: Bool {
+        guard chargeLimitSetElsewhere, let chargeLimit, let percent else { return false }
+        return percent >= chargeLimit
+    }
     // AC can be connected before the battery starts charging, or while charging is paused.
     var connectedToPower: Bool { present && (externalPower || charging) }
     var title: String { percent.map { "\($0)%" } ?? (present ? L10n.reading : L10n.externalPower) }

@@ -119,13 +119,15 @@ import Foundation
               && ChargeLimitState(supported: true, enabled: false, limit: 100).activeLimit == nil
               && ChargeLimitState(supported: false, enabled: true, limit: 80).activeLimit == nil,
               "the active limit needs support and an enabled limit below 100")
-        check(ChargeLimitState(supported: true, enabled: true, limit: 24, levels: [80, 85, 90, 95]).pausedElsewhere
-              && !ChargeLimitState(supported: true, enabled: true, limit: 80, levels: [80, 85, 90, 95]).pausedElsewhere
-              && !ChargeLimitState(supported: true, enabled: false, limit: 100, levels: [80, 85, 90, 95]).pausedElsewhere
-              && !ChargeLimitState(supported: true, enabled: true, limit: 24).pausedElsewhere,
-              "a limit macOS does not offer means another app paused charging")
-        check(BatteryState(present: true, percent: 24, externalPower: true, chargeLimit: 24, chargePausedElsewhere: true).detail == "其他 App 已暫停充電",
-              "the battery detail says another app paused charging")
+        check(ChargeLimitState(supported: true, enabled: true, limit: 24, levels: [80, 85, 90, 95]).setElsewhere
+              && !ChargeLimitState(supported: true, enabled: true, limit: 80, levels: [80, 85, 90, 95]).setElsewhere
+              && !ChargeLimitState(supported: true, enabled: false, limit: 100, levels: [80, 85, 90, 95]).setElsewhere
+              && !ChargeLimitState(supported: true, enabled: true, limit: 24).setElsewhere,
+              "a limit macOS does not offer means another app set it")
+        check(BatteryState(present: true, percent: 24, externalPower: true, chargeLimit: 24, chargeLimitSetElsewhere: true).detail == "其他 App 已暫停充電"
+              && BatteryState(present: true, percent: 29, externalPower: true, chargeLimit: 79, chargeLimitSetElsewhere: true).detail == "已接上電源 · 未充電"
+              && BatteryState(present: true, percent: 29, charging: true, externalPower: true, chargeLimit: 79, chargeLimitSetElsewhere: true).detail == "正在充電到 79% 上限",
+              "only another app's limit at the current level reads as paused")
         let registry: [String: Any] = ["BatteryInstalled": true, "CycleCount": 239, "DesignCycleCount9C": 1000,
                                        "BatteryData": ["DesignCapacity": 6075, "NominalChargeCapacity": 5191]]
         let estimated = BatteryHealthService.parse(registry: registry)

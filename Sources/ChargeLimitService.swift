@@ -13,9 +13,9 @@ struct ChargeLimitState: Equatable, Sendable {
     static let unsupported = ChargeLimitState()
     /// The limit charging stops at, or nil when the limit is off or unavailable.
     var activeLimit: Int? { supported && enabled && limit < 100 ? limit : nil }
-    /// True when the limit is one macOS does not offer, e.g. the current level: another app (AlDente's
-    /// heat protection or sailing mode) has paused charging through the same system limit.
-    var pausedElsewhere: Bool {
+    /// True when the limit is one macOS does not offer: another app (AlDente) set it through the same
+    /// system limit, either as its own level or pinned at the current level to pause charging.
+    var setElsewhere: Bool {
         guard let activeLimit, !levels.isEmpty else { return false }
         return !levels.contains(activeLimit)
     }

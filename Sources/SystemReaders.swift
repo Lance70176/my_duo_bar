@@ -29,7 +29,7 @@ enum SystemReaders {
                 minutesRemaining: d[kIOPSTimeToEmptyKey] as? Int,
                 lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
                 chargeLimit: limit.activeLimit,
-                chargePausedElsewhere: limit.pausedElsewhere)
+                chargeLimitSetElsewhere: limit.setElsewhere)
         }
         return BatteryState()
     }

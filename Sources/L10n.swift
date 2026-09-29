@@ -126,6 +126,9 @@ enum L10n {
     static func chargeLimitPausedElsewhere(_ limit: Int) -> String {
         pick("其他 App 已暫停充電，停在 \(limit)%", "Paused by another app at \(limit)%", "他のアプリが \(limit)% で一時停止中")
     }
+    static func chargeLimitSetElsewhere(_ limit: Int) -> String {
+        pick("由其他 App 設定，充到 \(limit)% 停止", "Set by another app · Stops at \(limit)%", "他のアプリが設定 · \(limit)% で停止")
+    }
     static var chargeLimitOff: String { pick("未限制，會充到 100%", "Off · Charges to 100%", "制限なし · 100% まで充電") }
     static var chargeLimitUnsupported: String {
         pick("此 Mac 或此版 macOS 不提供充電上限", "Not available on this Mac or macOS version", "この Mac または macOS では利用できません")

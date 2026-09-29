@@ -187,7 +187,11 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         let detail: String
         if current == nil { detail = L10n.reading }
         else if current?.supported == false { detail = L10n.chargeLimitUnsupported }
-        else if let active, current?.pausedElsewhere == true { detail = L10n.chargeLimitPausedElsewhere(active) }
+        else if let active, current?.setElsewhere == true {
+            // Another app's limit at or below the current level is how it pauses charging (AlDente's heat protection).
+            let paused = (battery.percent ?? 0) >= active
+            detail = paused ? L10n.chargeLimitPausedElsewhere(active) : L10n.chargeLimitSetElsewhere(active)
+        }
         else if let active { detail = L10n.chargeLimitOn(active) }
         else { detail = L10n.chargeLimitOff }
         limitRow.configure(symbol: active != nil ? "battery.75percent" : "battery.100percent", title: L10n.chargeLimit, detail: detail,
