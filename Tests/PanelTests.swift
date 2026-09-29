@@ -11,30 +11,6 @@ import CoreAudio
     static func main() {
         _ = NSApplication.shared
         var opened: [SystemSettings.Page] = []
-        do {
-            let expected: [SystemSettings.Page] = [.focus]
-            let panel = StatusPanel()
-            let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: panel.frame.width, height: panel.frame.height),
-                                  styleMask: .borderless, backing: .buffered, defer: false)
-            window.contentView = panel; window.orderFront(nil)
-            defer { window.orderOut(nil) }
-            panel.layoutSubtreeIfNeeded()
-            let rows = descendants(panel).compactMap { $0 as? StatusRow }
-            check(rows.map(\.destination) == expected, "each panel block holds its own rows")
-            opened.removeAll()
-            panel.onOpenSettings = { opened.append($0) }
-            for row in rows {
-                check(row.accessibilityRole() == .button, "status rows expose a button action")
-                check(row.hitTest(NSPoint(x: row.frame.midX, y: row.frame.midY)) === row,
-                      "the whole row, including its labels, is clickable")
-                row.performClick(nil)
-            }
-            check(opened == expected, "rows open their settings pages")
-            // Compact rows keep a hidden detail label below them; only drawn views have to fit.
-            let lowest = descendants(panel).filter { !$0.isHiddenOrHasHiddenAncestor }
-                .map { $0.convert($0.bounds, to: panel).minY }.min() ?? 0
-            check(lowest >= 0, "rows fit inside their panel block")
-        }
 
         L10n.overrideForTesting(.zhHant)
         let wifiMenu = WiFiMenuController()

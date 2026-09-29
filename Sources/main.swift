@@ -1,6 +1,5 @@
 import AppKit
 import ServiceManagement
-import Intents
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -9,7 +8,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let panelHeader = StatusPanelHeader()
     private let batteryMenu = BatteryMenuController()
     private let sleepMenu = SleepMenuController()
-    private let focusPanel = StatusPanel()
     private let wifiMenu = WiFiMenuController()
     private let vpnMenu = VPNMenuController()
     private let bluetoothMenu = BluetoothMenuController()
@@ -41,7 +39,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         batteryMenu.onOpenSettings = openSettings
         sleepMenu.onOpenSettings = openSettings
-        focusPanel.onOpenSettings = openSettings
         wifiMenu.onOpenSettings = openSettings
         vpnMenu.onOpenSettings = openSettings
         bluetoothMenu.onOpenSettings = openSettings
@@ -61,7 +58,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(vpnMenu.item)
         menu.addItem(bluetoothMenu.item)
         menu.addItem(soundMenu.item)
-        let focus = NSMenuItem(); focus.view = focusPanel; menu.addItem(focus)
         menu.addItem(.separator())
         for menuItem in [systemIconsItem, settingsItem, quitItem] {
             menuItem.target = self; menu.addItem(menuItem)
@@ -81,13 +77,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if firstLaunch { UserDefaults.standard.set(true, forKey: "hasShownSetup") }
         if firstLaunch || CommandLine.arguments.contains("--settings") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showSettings() }
-        }
-        if CommandLine.arguments.contains("--request-focus") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                INFocusStatusCenter.default.requestAuthorization { _ in
-                    DispatchQueue.main.async { self?.monitor.refresh() }
-                }
-            }
         }
         if CommandLine.arguments.contains("--open-menu") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.item.button?.performClick(nil) }
@@ -120,7 +109,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         vpnMenu.update(status: state)
         bluetoothMenu.update(status: state)
         soundMenu.update(status: state)
-        focusPanel.update(state)
     }
 
     private func update(_ state: SystemStatus) {
@@ -163,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 if CommandLine.arguments.contains("--diagnose") {
     let status = SystemStatus(battery: SystemReaders.battery(),
                               wifi: SystemReaders.wifi(client: .shared(), route: .unknown),
-                              vpn: SystemReaders.vpn(), audio: SystemReaders.audio(), focus: SystemReaders.focus())
+                              vpn: SystemReaders.vpn(), audio: SystemReaders.audio())
     let health = BatteryHealthService.read()
     let power = PowerReader.read()
     let report: [String: Any] = [
@@ -192,9 +180,6 @@ if CommandLine.arguments.contains("--diagnose") {
         "headphoneCount": status.audio.headphoneNames.count,
         "muteAvailable": status.audio.muted != nil,
         "muted": status.audio.muted as Any? ?? NSNull(),
-        "focus": status.focus.title,
-        "focusAuthorization": INFocusStatusCenter.default.authorizationStatus.rawValue,
-        "focusSharedValue": INFocusStatusCenter.default.focusStatus.isFocused as Any? ?? NSNull(),
         "activeGlyphCount": status.glyphs.count,
         "loginItemStatus": SMAppService.mainApp.status.rawValue
     ]

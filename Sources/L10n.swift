@@ -89,17 +89,7 @@ enum L10n {
     static var listSeparator: String { pick("、", ", ", "、") }
     static var summarySeparator: String { pick("，", ", ", "、") }
 
-    // MARK: Focus
     static var off: String { pick("未開啟", "Off", "オフ") }
-    static var on: String { pick("已開啟", "On", "オン") }
-    static var notShared: String { pick("狀態未共享", "Not Shared", "共有されていません") }
-    static var focusNotSharedYet: String { pick("系統尚未共享專注狀態", "macOS hasn't shared Focus status yet.", "システムが集中モードの状態をまだ共有していません。") }
-    static var focusNeedsReading: String { pick("需要讀取系統專注狀態", "Focus status hasn't been read yet.", "集中モードの状態をまだ読み取っていません。") }
-    static var focusAllowInSettings: String {
-        pick("在 MyDuoBar 設定中允許讀取專注狀態。僅讀取是否專注，不區分具體模式。",
-             "Allow Focus access in MyDuoBar Settings. Only whether Focus is on is read, not which mode.",
-             "MyDuoBar の設定で集中モードの読み取りを許可してください。オンかどうかだけを読み取り、モードの種類は区別しません。")
-    }
 
     // MARK: Battery
     static var reading: String { pick("讀取中", "Reading…", "読み込み中") }
@@ -165,7 +155,7 @@ enum L10n {
         return pick("電池 \(text)", "Battery \(text)", "バッテリー \(text)")
     }
     static var powerChartTitle: String { pick("功率變化", "Power Over Time", "電力の推移") }
-    static var powerChartStart: String { pick("30 分鐘前", "30 min ago", "30 分前") }
+    static func powerChartHoursAgo(_ hours: Int) -> String { pick("\(hours) 小時前", "\(hours) hr ago", "\(hours) 時間前") }
     static var powerChartNow: String { pick("現在", "Now", "現在") }
     static var powerChartEmpty: String { pick("尚無記錄", "No readings yet", "記録なし") }
     static func powerChartRated(_ watts: Int) -> String { pick("上限 \(watts) W", "Max \(watts) W", "上限 \(watts) W") }
@@ -240,10 +230,8 @@ enum L10n {
     // MARK: Dots
     static var headphones: String { pick("耳機", "Headphones", "ヘッドフォン") }
     static var mute: String { pick("靜音", "Mute", "消音") }
-    static var focus: String { pick("專注", "Focus", "集中モード") }
     static var vpnConnected: String { pick("VPN 已連線", "VPN Connected", "VPN 接続済み") }
     static var headphonesConnected: String { pick("耳機已連線", "Headphones Connected", "ヘッドフォン接続済み") }
-    static var focusOn: String { pick("專注已開啟", "Focus On", "集中モード オン") }
 
     // MARK: Wi-Fi submenu
     static var knownNetworks: String { pick("已知的網路", "Known Networks", "既知のネットワーク") }
@@ -330,7 +318,6 @@ enum L10n {
     static var vpnSettings: String { pick("VPN 設定", "VPN Settings", "VPN 設定") }
     static var bluetoothSettings: String { pick("藍牙設定", "Bluetooth Settings", "Bluetooth 設定") }
     static var soundSettings: String { pick("聲音設定", "Sound Settings", "サウンド設定") }
-    static var focusSettings: String { pick("專注模式設定", "Focus Settings", "集中モード設定") }
     static var menuBarSettings: String { pick("選單列設定", "Menu Bar Settings", "メニューバー設定") }
 
     // MARK: Menu
@@ -366,27 +353,12 @@ enum L10n {
              "システム設定で標準の Wi-Fi とバッテリーのメニューバー表示をオフにすると、スペースを確保できます。")
     }
     static var statusAccess: String { pick("狀態讀取", "Status Access", "状態の読み取り") }
-    static var allowFocus: String { pick("允許讀取專注狀態…", "Allow Focus Access…", "集中モードの読み取りを許可…") }
     static var allowWiFiName: String { pick("允許顯示 Wi-Fi 名稱…", "Allow Wi-Fi Name…", "Wi-Fi 名の表示を許可…") }
     static var statusAccessNote: String {
-        pick("顯示 Wi-Fi 名稱需要定位服務權限，App 不會取得地理座標。專注狀態未共享時，選單中會標示「狀態未共享」。",
-             "Showing the Wi-Fi name requires Location Services permission; the app never reads your coordinates. When Focus status isn't shared, the menu shows “Not Shared”.",
-             "Wi-Fi 名の表示には位置情報サービスの許可が必要ですが、座標は取得しません。集中モードの状態が共有されていない場合、メニューに「共有されていません」と表示されます。")
+        pick("顯示 Wi-Fi 名稱需要定位服務權限，App 不會取得地理座標。",
+             "Showing the Wi-Fi name requires Location Services permission; the app never reads your coordinates.",
+             "Wi-Fi 名の表示には位置情報サービスの許可が必要ですが、座標は取得しません。")
     }
     static func versionFooter(_ version: String) -> String { pick("\(version) · 本機執行", "\(version) · Runs locally", "\(version) · ローカルで動作") }
-    static var focusPrompt: String {
-        pick("按一下下方按鈕，並在系統對話框中允許讀取。另外還需在系統設定中開啟「共享專注狀態」。",
-             "Click the button below and allow access in the system dialog. Also turn on “Share Focus Status” in System Settings.",
-             "下のボタンをクリックし、システムのダイアログで許可してください。さらにシステム設定で「集中モードの状態を共有」をオンにしてください。")
-    }
-    static var focusReadable: String { pick("專注狀態可讀 · ", "Focus status available · ", "集中モードの状態を取得可能 · ") }
     static var loginItemFailed: String { pick("自動啟動尚未完成", "Couldn't Set Launch at Login", "ログイン時の起動を設定できませんでした") }
-    static var focusNotSharedTitle: String { pick("專注狀態尚未共享", "Focus Status Not Shared", "集中モードの状態が共有されていません") }
-    static var focusNotSharedBody: String {
-        pick("請在系統設定中允許 MyDuoBar 讀取專注狀態，並在專注模式 → 專注狀態中開啟共享。MyDuoBar 只讀取是否專注，開啟時點亮圓點。",
-             "Allow MyDuoBar to read Focus status in System Settings, and turn on sharing under Focus → Focus Status. MyDuoBar only reads whether Focus is on and lights the dot when it is.",
-             "システム設定で MyDuoBar による集中モードの読み取りを許可し、「集中モード → 集中モードの状態」で共有をオンにしてください。MyDuoBar は集中モードがオンかどうかだけを読み取り、オンのときにドットを点灯します。")
-    }
-    static var openFocusSettings: String { pick("開啟專注設定", "Open Focus Settings", "集中モード設定を開く") }
-    static var later: String { pick("稍後", "Later", "後で") }
 }

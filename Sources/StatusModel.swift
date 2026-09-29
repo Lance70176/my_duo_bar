@@ -1,24 +1,5 @@
 import Foundation
 
-enum FocusState: Equatable {
-    case off
-    case active
-    case unavailable(String)
-    var isActive: Bool { self == .active }
-    var title: String {
-        switch self {
-        case .off: return L10n.off
-        case .active: return L10n.on
-        case .unavailable: return L10n.notShared
-        }
-    }
-    var symbol: String { isActive ? "moon.fill" : "moon" }
-    static func shared(_ value: Bool?) -> FocusState {
-        guard let value else { return .unavailable(L10n.focusNotSharedYet) }
-        return value ? .active : .off
-    }
-}
-
 struct BatteryState: Equatable {
     var present = false
     var percent: Int?
@@ -142,13 +123,12 @@ struct AudioState: Equatable {
 }
 
 enum StatusGlyph: String, CaseIterable {
-    case vpn, headphones, mute, focus
+    case vpn, headphones, mute
     var title: String {
         switch self {
         case .vpn: return "VPN"
         case .headphones: return L10n.headphones
         case .mute: return L10n.mute
-        case .focus: return L10n.focus
         }
     }
     var symbol: String {
@@ -156,7 +136,6 @@ enum StatusGlyph: String, CaseIterable {
         case .vpn: return "key.horizontal"
         case .headphones: return "headphones"
         case .mute: return "speaker.slash.fill"
-        case .focus: return "moon.fill"
         }
     }
     func isActive(in status: SystemStatus) -> Bool {
@@ -164,7 +143,6 @@ enum StatusGlyph: String, CaseIterable {
         case .vpn: return status.vpn.active
         case .headphones: return status.audio.headphoneActive
         case .mute: return status.audio.muted == true
-        case .focus: return status.focus.isActive
         }
     }
     var label: String {
@@ -172,7 +150,6 @@ enum StatusGlyph: String, CaseIterable {
         case .vpn: return L10n.vpnConnected
         case .headphones: return L10n.headphonesConnected
         case .mute: return L10n.muted
-        case .focus: return L10n.focusOn
         }
     }
 }
@@ -182,13 +159,11 @@ struct SystemStatus: Equatable {
     var wifi = WiFiState()
     var vpn = VPNState()
     var audio = AudioState()
-    var focus: FocusState = .unavailable(L10n.focusNeedsReading)
     var glyphs: [StatusGlyph] {
         var items: [StatusGlyph] = []
         if vpn.active { items.append(.vpn) }
         if audio.headphoneActive { items.append(.headphones) }
         if audio.muted == true { items.append(.mute) }
-        if focus.isActive { items.append(.focus) }
         return items
     }
     var accessibilitySummary: String {
@@ -200,7 +175,6 @@ struct SystemStatus: Equatable {
         s.wifi = WiFiState(available: true, powered: true, associated: true, ssid: "Home Wi-Fi", rssi: -48, route: .wifi)
         s.vpn.names = [L10n.personalVPN]
         s.audio = AudioState(outputName: "AirPods Pro", headphoneNames: ["AirPods Pro"], muted: true, volume: 0)
-        s.focus = .active
         return s
     }
 }

@@ -60,26 +60,20 @@ import Foundation
     static func main() {
         // String checks below are written in Traditional Chinese; pin it so the host language doesn't matter.
         L10n.overrideForTesting(.zhHant)
-        for mask in 0..<16 {
+        for mask in 0..<8 {
             var s = SystemStatus()
             s.vpn.names = mask & 1 == 0 ? [] : ["VPN"]
             s.audio.headphoneNames = mask & 2 == 0 ? [] : ["AirPods"]
             s.audio.muted = mask & 4 != 0
-            s.focus = mask & 8 == 0 ? .off : .active
             check(s.glyphs.count == mask.nonzeroBitCount, "all \(mask) state combinations identify the active dots")
             check(Set(s.glyphs.map(\.label)).count == s.glyphs.count, "no duplicated glyph for mask \(mask)")
         }
         var unknown = SystemStatus()
         unknown.vpn.hasUnidentifiedTunnel = true
         unknown.audio.muted = nil
-        unknown.focus = .unavailable("denied")
         check(unknown.glyphs.isEmpty, "unknown states and ordinary tunnels never become active badges")
         check(!unknown.vpn.active, "utun is not VPN evidence")
-        check(FocusState.shared(true) == .active, "shared focus on becomes moon")
-        check(FocusState.shared(false) == .off, "shared focus off leaves its dot inactive")
-        if case .unavailable = FocusState.shared(nil) { check(true, "unshared focus stays unknown") }
-        else { check(false, "unshared focus must not become off") }
-        check(SystemStatus.preview().glyphs == [.vpn, .headphones, .mute, .focus], "four active states in consistent order")
+        check(SystemStatus.preview().glyphs == [.vpn, .headphones, .mute], "three active states in consistent order")
         var audio = AudioState()
         check(audio.volumeLevel == nil && !audio.showsMuteBar, "unknown volume lights no mark and shows no bar")
         for (volume, marks) in [(0, 0), (1, 1), (25, 1), (26, 2), (50, 2), (51, 3), (75, 3), (76, 4), (100, 4)] {
@@ -109,7 +103,6 @@ import Foundation
         check(!restored.showVolume, "the hidden choice survives reload")
         restored.setShowVolume(true)
         check(IconPreferences(defaults: defaults).showVolume, "showing the marks again is saved")
-        check(!StatusGlyph.focus.isActive(in: unknown), "unshared focus never counts as active")
         check(StatusGlyph.allCases.allSatisfy { $0.isActive(in: SystemStatus.preview()) }, "each active state reports itself")
         let before = SystemStatus.preview()
         check(!before.shouldAnimate(from: before), "unchanged state does not animate")
@@ -129,8 +122,6 @@ import Foundation
         check(changed.shouldAnimate(from: before), "headphone dot change animates")
         changed = before; changed.audio.muted = false
         check(changed.shouldAnimate(from: before), "mute dot change animates")
-        changed = before; changed.focus = .off
-        check(changed.shouldAnimate(from: before), "focus dot change animates")
         func route(_ destination: UInt32, _ mask: UInt32, _ interface: String = "utun4", usable: Bool = true) -> IPv4TunnelRoute {
             IPv4TunnelRoute(interface: interface, destination: destination, mask: mask, usable: usable)
         }
@@ -212,14 +203,14 @@ import Foundation
         check(BatteryState(present: true, percent: 87, externalPower: true, chargeLimit: 80).detail == "Charged to 80% Limit", "English charge limit")
         var english = SystemStatus(); english.vpn.names = ["B", "A"]
         check(english.vpn.title == "B, A", "English list separator")
-        check(StatusGlyph.focus.title == "Focus" && FocusState.off.title == "Off", "English dot and Focus titles")
+        check(StatusGlyph.mute.title == "Mute" && L10n.off == "Off", "English dot and off titles")
 
         L10n.overrideForTesting(.ja)
         check(wifi.signalQuality == "電波良好", "Japanese signal wording")
         check(BatteryState().title == "外部電源", "Japanese desktop power")
         check(BatteryState(present: true, percent: 87, externalPower: true, chargeLimit: 80).detail == "上限 80% まで充電済み", "Japanese charge limit")
         check(health.capacityLine == "最大容量 84% · 正常" && health.cycleLine == "充放電回数 239（設計 1000）", "Japanese health lines")
-        check(StatusGlyph.focus.title == "集中モード" && FocusState.active.title == "オン", "Japanese dot and Focus titles")
+        check(StatusGlyph.mute.title == "消音" && L10n.off == "オフ", "Japanese dot and off titles")
         check(AudioState(muted: true).soundTitle == "消音中", "Japanese mute wording")
 
         // Every language must supply every phrase; spot-check that none fall back to another language.
@@ -227,7 +218,7 @@ import Foundation
         for language in [AppLanguage.zhHant, .en, .ja] {
             L10n.overrideForTesting(language)
             seen[language] = L10n.statusAccessNote
-            check(!L10n.quit.isEmpty && !L10n.focusNotSharedBody.isEmpty, "\(language) has menu and alert text")
+            check(!L10n.quit.isEmpty && !L10n.loginItemFailed.isEmpty, "\(language) has menu and alert text")
         }
         check(Set(seen.values).count == 3, "each language has its own settings text")
 

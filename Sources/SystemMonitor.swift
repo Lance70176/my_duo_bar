@@ -1,5 +1,4 @@
 import AppKit
-import Intents
 import CoreAudio
 import CoreWLAN
 import IOKit.ps
@@ -17,12 +16,10 @@ final class SystemMonitor: NSObject, CWEventDelegate {
     private let path = NWPathMonitor()
     private var route: NetworkLink = .unknown
     private var timer: Timer?
-    private var focusTimer: Timer?
     private var powerSource: CFRunLoopSource?
     private var dynamicStore: SCDynamicStore?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var audioListeners: [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
-    private var focusObservation: NSKeyValueObservation?
     private var watchedOutput: AudioDeviceID?
     private var sampling = false
     private var needsAnotherSample = false
@@ -79,13 +76,10 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         observe(NotificationCenter.default, .NSProcessInfoPowerStateDidChange) { $0.refresh() }
         let workspace = NSWorkspace.shared.notificationCenter
         observe(workspace, NSWorkspace.willSleepNotification) { monitor in
-            monitor.sleeping = true; monitor.timer?.invalidate(); monitor.focusTimer?.invalidate()
+            monitor.sleeping = true; monitor.timer?.invalidate()
         }
         observe(workspace, NSWorkspace.didWakeNotification) { monitor in
             monitor.sleeping = false; monitor.resetTimer(); monitor.refresh()
-        }
-        focusObservation = INFocusStatusCenter.default.observe(\.focusStatus, options: [.new]) { [weak self] _, _ in
-            Task { @MainActor in self?.refreshFocus() }
         }
         resetTimer()
         refresh()
@@ -109,7 +103,6 @@ final class SystemMonitor: NSObject, CWEventDelegate {
 
     private func resetTimer() {
         timer?.invalidate()
-        focusTimer?.invalidate()
         guard !sleeping else { return }
         let interval: TimeInterval = menuOpen ? 3 : 30
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
@@ -118,27 +111,6 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         timer.tolerance = menuOpen ? 0.5 : 8
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
-        // Supplement Focus notifications without re-reading audio and networking.
-        let focusTimer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshFocus() }
-        }
-        focusTimer.tolerance = 0.25
-        RunLoop.main.add(focusTimer, forMode: .common)
-        self.focusTimer = focusTimer
-    }
-
-    private func refreshFocus() {
-        guard !sleeping else { return }
-        worker.async { [weak self] in
-            let focus = SystemReaders.focus()
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    guard let self, !self.sleeping, self.status.focus != focus else { return }
-                    self.status.focus = focus
-                    self.onChange?(self.status)
-                }
-            }
-        }
     }
 
     func refresh() {
@@ -153,9 +125,7 @@ final class SystemMonitor: NSObject, CWEventDelegate {
             value.wifi = SystemReaders.wifi(client: CWWiFiClient.shared(), route: route)
             value.vpn = SystemReaders.vpn()
             value.audio = SystemReaders.audio()
-            value.focus = SystemReaders.focus()
             let sample = value
-            // Keep worker order on the main queue so a focus-only result and a full sample stay ordered.
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.finishSample(sample) } }
         }
     }
@@ -210,7 +180,6 @@ final class SystemMonitor: NSObject, CWEventDelegate {
 
     func stop() {
         timer?.invalidate()
-        focusTimer?.invalidate()
         path.cancel()
         try? wifi.stopMonitoringAllEvents()
         if let powerSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSource, .commonModes) }
@@ -220,7 +189,6 @@ final class SystemMonitor: NSObject, CWEventDelegate {
             AudioObjectRemovePropertyListenerBlock(object, &address, .main, block)
         }
         audioListeners.removeAll()
-        focusObservation?.invalidate()
         for (center, token) in observers { center.removeObserver(token) }
         observers.removeAll()
     }

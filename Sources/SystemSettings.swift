@@ -2,7 +2,7 @@ import AppKit
 
 enum SystemSettings {
     enum Page: String, CaseIterable {
-        case wifi, network, battery, vpn, bluetooth, sound, focus, menubar
+        case wifi, network, battery, vpn, bluetooth, sound, menubar
 
         var title: String {
             switch self {
@@ -12,7 +12,6 @@ enum SystemSettings {
             case .vpn: return L10n.vpnSettings
             case .bluetooth: return L10n.bluetoothSettings
             case .sound: return L10n.soundSettings
-            case .focus: return L10n.focusSettings
             case .menubar: return L10n.menuBarSettings
             }
         }
@@ -26,7 +25,6 @@ enum SystemSettings {
             case .vpn: target = "com.apple.NetworkExtensionSettingsUI.NESettingsUIExtension"
             case .bluetooth: target = "com.apple.BluetoothSettings"
             case .sound: target = "com.apple.Sound-Settings.extension"
-            case .focus: target = "com.apple.Focus-Settings.extension"
             case .menubar: target = "com.apple.ControlCenter-Settings.extension"
             }
             return URL(string: "x-apple.systempreferences:" + target)!

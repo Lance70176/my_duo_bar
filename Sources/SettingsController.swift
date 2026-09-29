@@ -1,7 +1,6 @@
 import AppKit
 import ServiceManagement
 import CoreLocation
-import Intents
 
 final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private static let contentWidth: CGFloat = 496
@@ -9,7 +8,6 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private let volumeCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let login = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let languagePopup = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let focusStatus = NSTextField(wrappingLabelWithString: "")
     private let location = CLLocationManager()
     private let icon = LargeIconView()
     private let volumeGuide = NSTextField(wrappingLabelWithString: "")
@@ -93,16 +91,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         stack.addArrangedSubview(button(L10n.hideSystemIcons, #selector(openMenuBar)))
         addSeparator(stack)
         stack.addArrangedSubview(heading(L10n.statusAccess))
-        focusStatus.font = .systemFont(ofSize: 12)
-        focusStatus.textColor = .secondaryLabelColor
-        focusStatus.preferredMaxLayoutWidth = Self.contentWidth - 52
-        stack.addArrangedSubview(focusStatus)
-        let actions = NSStackView(views: [
-            button(L10n.allowFocus, #selector(explainFocus)),
-            button(L10n.allowWiFiName, #selector(requestLocation))
-        ])
-        actions.spacing = 8
-        stack.addArrangedSubview(actions)
+        stack.addArrangedSubview(button(L10n.allowWiFiName, #selector(requestLocation)))
         stack.addArrangedSubview(note(L10n.statusAccessNote))
         addSeparator(stack)
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
@@ -234,10 +223,6 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.showVolume = preferences.showVolume
         volumeCheck.state = preferences.showVolume ? .on : .off
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        switch status.focus {
-        case .unavailable: focusStatus.stringValue = L10n.focusPrompt
-        default: focusStatus.stringValue = L10n.focusReadable + status.focus.title
-        }
     }
     func present(status: SystemStatus) {
         update(status)
@@ -264,21 +249,5 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     // CoreLocation delivers this on the run loop that created the manager (main); hop explicitly for Swift 6.
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor [weak self] in self?.onRefresh?() }
-    }
-
-    @objc private func explainFocus() {
-        let center = INFocusStatusCenter.default
-        if center.authorizationStatus == .denied || center.authorizationStatus == .restricted {
-            let alert = NSAlert()
-            alert.messageText = L10n.focusNotSharedTitle
-            alert.informativeText = L10n.focusNotSharedBody
-            alert.addButton(withTitle: L10n.openFocusSettings)
-            alert.addButton(withTitle: L10n.later)
-            if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open(.focus) }
-            return
-        }
-        center.requestAuthorization { [weak self] _ in
-            DispatchQueue.main.async { self?.onRefresh?() }
-        }
     }
 }

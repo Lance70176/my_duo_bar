@@ -1,5 +1,4 @@
 import AppKit
-import Intents
 import AudioToolbox
 import CoreAudio
 import CoreWLAN
@@ -85,14 +84,6 @@ enum SystemReaders {
         }
         state.names.sort()
         return state
-    }
-
-    static func focus() -> FocusState {
-        let center = INFocusStatusCenter.default
-        guard center.authorizationStatus == .authorized else {
-            return .unavailable(L10n.focusAllowInSettings)
-        }
-        return .shared(center.focusStatus.isFocused)
     }
 
     static func audio() -> AudioState {

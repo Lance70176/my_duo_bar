@@ -13,7 +13,7 @@ for DUOBAR_ARCH in arm64 x86_64; do
         -target "$DUOBAR_ARCH-apple-macosx$DUOBAR_DEPLOYMENT_TARGET" -sdk "$DUOBAR_SDK" \
         -module-cache-path "$DUOBAR_BUILD/module-cache" \
         -framework AppKit -framework CoreWLAN -framework CoreAudio -framework IOKit -framework IOBluetooth -framework CoreBluetooth \
-        -framework Intents -framework Network -framework SystemConfiguration -framework ServiceManagement -framework CoreLocation \
+        -framework Network -framework SystemConfiguration -framework ServiceManagement -framework CoreLocation \
         "$DUOBAR_ROOT"/Sources/*.swift -o "$DUOBAR_BUILD/bin/MyDuoBar-$DUOBAR_ARCH"
 done
 xcrun lipo -create "$DUOBAR_BUILD/bin/MyDuoBar-arm64" "$DUOBAR_BUILD/bin/MyDuoBar-x86_64" -output "$DUOBAR_APP/Contents/MacOS/MyDuoBar"

@@ -155,8 +155,10 @@ enum PowerLogFile {
 @MainActor
 final class PowerLogger {
     static let interval: TimeInterval = 10
-    /// How much history stays in memory; the chart shows the last half hour of it.
-    static let keep: TimeInterval = 2 * 3600
+    /// The time the chart spans, ending now.
+    static let chartSpan: TimeInterval = 2 * 3600
+    /// How much history stays in memory: the chart's span plus a margin so its left edge is never empty.
+    static let keep: TimeInterval = chartSpan + 600
 
     let reader: PowerReading
     let fileURL: URL?

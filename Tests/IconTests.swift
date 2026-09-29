@@ -50,7 +50,7 @@ struct IconTests {
         let full = bitmap(state)
         check(alpha(full, at: rightEnd) > 0.9, "full battery fills the right end")
         var inactive = state
-        inactive.vpn.names = []; inactive.audio.headphoneNames = []; inactive.audio.volume = nil; inactive.focus = .off
+        inactive.vpn.names = []; inactive.audio.headphoneNames = []; inactive.audio.volume = nil
         let gray = bitmap(inactive)
         // A point 0.95 pt from the first mark's center must remain inside either state.
         let dotCenter = DuoIcon.point(atFraction: DuoIcon.dotFraction(index: 0, count: 4))
@@ -150,8 +150,8 @@ struct IconTests {
         view.update(mutedLive, showVolume: false)
         check(barLayer.isHidden, "a hidden volume hides the bar too")
         view.update(inactive, showVolume: true)
-        var focused = inactive; focused.focus = .active
-        view.update(focused)
+        var vpnOn = inactive; vpnOn.vpn.names = ["VPN"]
+        view.update(vpnOn)
         check(!view.isShowingHeadphones, "Wi-Fi is shown while no headphones are connected")
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             let turn = trackLayer.animation(forKey: "turn") as? CAKeyframeAnimation
@@ -165,7 +165,7 @@ struct IconTests {
             check(center.animation(forKey: "turn") == nil, "Wi-Fi stays upright")
             CATransaction.flush()
             let before = trackLayer.animation(forKey: "turn")!.beginTime
-            var batteryChange = focused; batteryChange.battery.percent = 99
+            var batteryChange = vpnOn; batteryChange.battery.percent = 99
             view.update(batteryChange); view.animateTurn()
             check(trackLayer.animation(forKey: "turn")!.beginTime == before,
                   "battery updates and clicks do not restart an existing turn")
@@ -174,16 +174,16 @@ struct IconTests {
             view.stopAnimations(); view.animateTurn()
             check(trackLayer.animation(forKey: "turn") != nil, "clicking the menu starts a fresh turn when idle")
         }
-        var connected = focused; connected.audio.headphoneNames = ["AirPods Pro"]
+        var connected = vpnOn; connected.audio.headphoneNames = ["AirPods Pro"]
         view.update(connected)
         check(view.isShowingHeadphones, "connecting headphones shows them in the middle of the icon")
         RunLoop.main.run(until: Date().addingTimeInterval(StatusIconView.headphoneGlimpse + 0.4))
         check(!view.isShowingHeadphones, "the headphones give way to Wi-Fi again")
-        view.update(focused); view.update(connected)
+        view.update(vpnOn); view.update(connected)
         check(view.isShowingHeadphones, "reconnecting shows the headphones again")
-        view.update(focused)
+        view.update(vpnOn)
         check(!view.isShowingHeadphones, "disconnecting ends the glimpse at once")
-        var powered = focused; powered.battery.externalPower = true; powered.battery.charging = false
+        var powered = vpnOn; powered.battery.externalPower = true; powered.battery.charging = false
         view.update(powered)
         let ringColor = NSColor(cgColor: batteryLayer.strokeColor!)!.usingColorSpace(.deviceRGB)!
         check(ringColor.greenComponent > ringColor.redComponent + 0.3, "AC power colors the live ring green before charging starts")

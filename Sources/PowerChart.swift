@@ -1,11 +1,10 @@
 import AppKit
 
-/// The power chart in the Battery submenu: adapter input and battery charge power over the last half hour,
+/// The power chart in the Battery submenu: adapter input and battery charge power over the last two hours,
 /// with the adapter's rating as a dashed line. Drawn by hand so it stays in the menu's own colors.
 final class PowerChartView: NSView {
     static let height: CGFloat = 112
-    /// The time the chart spans, ending now.
-    static let span: TimeInterval = 30 * 60
+    static let span = PowerLogger.chartSpan
     /// Readings further apart than this (sleep, app not running) break the line; macOS refreshes about every 30 seconds.
     static let gap: TimeInterval = 120
 
@@ -56,7 +55,15 @@ final class PowerChartView: NSView {
         frame.lineWidth = 1
         frame.stroke()
         NSAttributedString(string: "\(Int(top)) W", attributes: secondary).draw(at: NSPoint(x: plot.minX + 4, y: plot.maxY - 14))
-        NSAttributedString(string: L10n.powerChartStart, attributes: secondary).draw(at: NSPoint(x: plot.minX, y: 2))
+        NSAttributedString(string: L10n.powerChartHoursAgo(Int(Self.span / 3600)), attributes: secondary).draw(at: NSPoint(x: plot.minX, y: 2))
+        // A faint line at the halfway mark, labelled, so the time along a long span is easy to read.
+        let midLine = NSBezierPath()
+        midLine.move(to: NSPoint(x: plot.midX, y: plot.minY)); midLine.line(to: NSPoint(x: plot.midX, y: plot.maxY))
+        midLine.lineWidth = 1
+        NSColor.labelColor.withAlphaComponent(0.08).setStroke()
+        midLine.stroke()
+        let midLabel = NSAttributedString(string: L10n.powerChartHoursAgo(Int(Self.span / 7200)), attributes: secondary)
+        midLabel.draw(at: NSPoint(x: plot.midX - midLabel.size().width / 2, y: 2))
         let nowLabel = NSAttributedString(string: L10n.powerChartNow, attributes: secondary)
         nowLabel.draw(at: NSPoint(x: plot.maxX - nowLabel.size().width, y: 2))
 
