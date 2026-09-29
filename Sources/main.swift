@@ -172,6 +172,7 @@ if CommandLine.arguments.contains("--diagnose") {
         "powerRingGreen": status.battery.connectedToPower && !status.battery.lowPowerMode,
         "batteryPercent": status.battery.percent as Any? ?? NSNull(),
         "chargeLimit": status.battery.chargeLimit as Any? ?? NSNull(),
+        "chargePausedElsewhere": status.battery.chargePausedElsewhere,
         "batteryMaximumCapacity": health?.maximumCapacity as Any? ?? NSNull(),
         "batteryCondition": health.map { "\($0.condition)" } as Any? ?? NSNull(),
         "batteryCycleCount": health?.cycleCount as Any? ?? NSNull(),

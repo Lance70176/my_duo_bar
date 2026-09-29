@@ -588,6 +588,16 @@ extension PanelTests {
         check(menu.levelRows.map(\.isChecked) == [false, false, false, true] && defaults.integer(forKey: BatteryMenuController.levelKey) == 95,
               "a limit chosen in System Settings shows up while the submenu is open and becomes the remembered level")
 
+        fake.setExternally(ChargeLimitState(supported: true, enabled: true, limit: 24, levels: [80, 85, 90, 95]))
+        menu.update(status: state)
+        spin(0.2)
+        check(menu.limitRow.toggleSwitch.isOn && menu.limitRow.detailText == "其他 App 已暫停充電，停在 24%"
+              && menu.levelRows.allSatisfy { !$0.isChecked } && defaults.integer(forKey: BatteryMenuController.levelKey) == 95,
+              "a limit pinned by another app is shown as paused and is not remembered as a level")
+        fake.setExternally(ChargeLimitState(supported: true, enabled: true, limit: 95, levels: [80, 85, 90, 95]))
+        menu.update(status: state)
+        spin(0.2)
+
         L10n.overrideForTesting(.en)
         menu.rebuild()
         check(menu.submenu.items.first?.title == "Charge Limit" && menu.levelRows.first?.title == "Stop at 80%"

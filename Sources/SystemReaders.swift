@@ -22,12 +22,14 @@ enum SystemReaders {
                 guard let current, let maximum, maximum > 0 else { return nil }
                 return max(0, min(100, Int((Double(current) / Double(maximum) * 100).rounded())))
             }()
+            let limit = ChargeLimitService.read()
             return BatteryState(present: true, percent: percent,
                 charging: d[kIOPSIsChargingKey] as? Bool ?? false,
                 externalPower: d[kIOPSPowerSourceStateKey] as? String == kIOPSACPowerValue,
                 minutesRemaining: d[kIOPSTimeToEmptyKey] as? Int,
                 lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
-                chargeLimit: ChargeLimitService.read().activeLimit)
+                chargeLimit: limit.activeLimit,
+                chargePausedElsewhere: limit.pausedElsewhere)
         }
         return BatteryState()
     }

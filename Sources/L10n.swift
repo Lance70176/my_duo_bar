@@ -118,10 +118,14 @@ enum L10n {
     static func batteryLevel(_ value: String) -> String { pick("電量 \(value)", "Battery \(value)", "バッテリー \(value)") }
     static func chargingToLimit(_ limit: Int) -> String { pick("正在充電到 \(limit)% 上限", "Charging to \(limit)% Limit", "上限 \(limit)% まで充電中") }
     static func chargedToLimit(_ limit: Int) -> String { pick("已充電到 \(limit)% 上限", "Charged to \(limit)% Limit", "上限 \(limit)% まで充電済み") }
+    static var chargingPausedElsewhere: String { pick("其他 App 已暫停充電", "Charging Paused by Another App", "他のアプリが充電を一時停止中") }
 
     // MARK: Battery submenu
     static var chargeLimit: String { pick("充電上限", "Charge Limit", "充電上限") }
     static func chargeLimitOn(_ limit: Int) -> String { pick("充到 \(limit)% 就停止充電", "Stops charging at \(limit)%", "\(limit)% で充電を停止") }
+    static func chargeLimitPausedElsewhere(_ limit: Int) -> String {
+        pick("其他 App 已暫停充電，停在 \(limit)%", "Paused by another app at \(limit)%", "他のアプリが \(limit)% で一時停止中")
+    }
     static var chargeLimitOff: String { pick("未限制，會充到 100%", "Off · Charges to 100%", "制限なし · 100% まで充電") }
     static var chargeLimitUnsupported: String {
         pick("此 Mac 或此版 macOS 不提供充電上限", "Not available on this Mac or macOS version", "この Mac または macOS では利用できません")

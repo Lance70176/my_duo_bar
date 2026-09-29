@@ -13,6 +13,12 @@ struct ChargeLimitState: Equatable, Sendable {
     static let unsupported = ChargeLimitState()
     /// The limit charging stops at, or nil when the limit is off or unavailable.
     var activeLimit: Int? { supported && enabled && limit < 100 ? limit : nil }
+    /// True when the limit is one macOS does not offer, e.g. the current level: another app (AlDente's
+    /// heat protection or sailing mode) has paused charging through the same system limit.
+    var pausedElsewhere: Bool {
+        guard let activeLimit, !levels.isEmpty else { return false }
+        return !levels.contains(activeLimit)
+    }
 }
 
 /// The charge-limit calls the Battery submenu needs; `SystemChargeLimitService` is the real one.
