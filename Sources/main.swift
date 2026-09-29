@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         bluetoothMenu.onBluetoothChanged = { [weak self] in self?.monitor.refresh() }
         soundMenu.onOutputChanged = { [weak self] in self?.monitor.refresh() }
         batteryMenu.onChargeLimitChanged = { [weak self] in self?.monitor.refresh() }
+        batteryMenu.powerLog.start()
         wifiMenu.onWiFiChanged = { [weak self] in self?.monitor.refresh() }
         vpnMenu.onVPNChanged = { [weak self] in self?.monitor.refresh() }
         menu.delegate = self
@@ -156,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func openSystemIcons() { SystemSettings.open(.menubar) }
     @objc private func quitApp() { NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop(); sleepMenu.stop() }
+    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop(); sleepMenu.stop(); batteryMenu.powerLog.stop() }
 }
 
 if CommandLine.arguments.contains("--diagnose") {
@@ -164,6 +165,7 @@ if CommandLine.arguments.contains("--diagnose") {
                               wifi: SystemReaders.wifi(client: .shared(), route: .unknown),
                               vpn: SystemReaders.vpn(), audio: SystemReaders.audio(), focus: SystemReaders.focus())
     let health = BatteryHealthService.read()
+    let power = PowerReader.read()
     let report: [String: Any] = [
         "batteryPresent": status.battery.present,
         "batteryCharging": status.battery.charging,
@@ -177,6 +179,10 @@ if CommandLine.arguments.contains("--diagnose") {
         "batteryMaximumCapacity": health?.maximumCapacity as Any? ?? NSNull(),
         "batteryCondition": health.map { "\($0.condition)" } as Any? ?? NSNull(),
         "batteryCycleCount": health?.cycleCount as Any? ?? NSNull(),
+        "adapterWatts": power?.adapterWatts as Any? ?? NSNull(),
+        "inputWatts": power.map { ($0.inputWatts * 100).rounded() / 100 } as Any? ?? NSNull(),
+        "batteryWatts": power.map { ($0.batteryWatts * 100).rounded() / 100 } as Any? ?? NSNull(),
+        "systemWatts": power.map { ($0.systemWatts * 100).rounded() / 100 } as Any? ?? NSNull(),
         "wifiAssociated": status.wifi.associated,
         "wifiNameAvailable": status.wifi.ssid != nil,
         "vpnConfirmedCount": status.vpn.names.count,

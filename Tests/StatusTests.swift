@@ -7,6 +7,56 @@ import Foundation
         checks += 1
         guard value() else { fputs("FAIL: \(description)\n", stderr); exit(1) }
     }
+    /// The power reading from the registry and the CSV log format.
+    static func powerChecks() {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let plugged: [String: Any] = [
+            "ExternalConnected": true, "UpdateTime": 1_790_699_564, "Voltage": 12195, "Amperage": 2069, "CurrentCapacity": 24, "MaxCapacity": 100,
+            "AdapterDetails": ["Watts": 45, "AdapterVoltage": 20000, "Current": 2250, "Description": "pd charger"],
+            "PowerTelemetryData": ["SystemPowerIn": 43444, "SystemVoltageIn": 19403, "SystemCurrentIn": 2239, "SystemLoad": 16198]
+        ]
+        let sample = PowerReader.parse(registry: plugged, date: now)
+        check(sample?.adapterWatts == 45 && sample?.adapterVolts == 20 && sample?.adapterAmps == 2.25
+              && sample?.inputWatts == 43.444 && sample?.inputVolts == 19.403 && sample?.inputAmps == 2.239
+              && sample?.systemWatts == 16.198 && abs((sample?.batteryWatts ?? 0) - 25.231) < 0.001 && sample?.percent == 24,
+              "the registry gives the adapter rating, the live input, the system load and the battery power")
+        let unplugged: [String: Any] = [
+            "ExternalConnected": false, "Voltage": 12000, "Amperage": NSNumber(value: UInt64(bitPattern: -1500)),
+            "AdapterDetails": ["Watts": 45], "PowerTelemetryData": ["SystemPowerIn": 0, "SystemLoad": 18000]
+        ]
+        let onBattery = PowerReader.parse(registry: unplugged, date: now)
+        check(onBattery?.connected == false && onBattery?.inputWatts == 0 && onBattery?.batteryWatts == -18,
+              "on battery there is no adapter and a wrapped negative current reads as discharge")
+        check(PowerReader.parse(registry: ["BatteryInstalled": false], date: now) == nil, "no installed battery means no power reading")
+        if let sample {
+            var same = sample; same.date = now.addingTimeInterval(10)
+            var refreshed = same; refreshed.updateTime = 1_790_699_594
+            var unpluggedNow = same; unpluggedNow.adapterWatts = nil
+            check(!same.isNew(after: sample) && refreshed.isNew(after: sample) && unpluggedNow.isNew(after: sample)
+                  && sample.isNew(after: nil) && PowerSample(date: now).isNew(after: sample),
+                  "only a registry refresh or a plug change counts as a new reading")
+        }
+
+        guard let sample else { return }
+        let line = PowerLogFile.line(sample)
+        check(line.hasSuffix(",45,43.44,19.40,2.24,25.23,16.20,24") && line.split(separator: ",").count == 8,
+              "a log line holds the time, rating, input, battery and system power and the level")
+        let parsed = PowerLogFile.parse(line: line)
+        check(parsed?.date == now && parsed?.adapterWatts == 45 && parsed?.inputWatts == 43.44 && parsed?.percent == 24,
+              "a log line reads back")
+        check(PowerLogFile.parse(line: PowerLogFile.header) == nil, "the header is not a sample")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("myduobar-power-\(UUID().uuidString).csv")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let old = PowerSample(date: now.addingTimeInterval(-3 * 3600), adapterWatts: 45, inputWatts: 30)
+        PowerLogFile.append([old, sample], to: url)
+        PowerLogFile.append([PowerSample(date: now.addingTimeInterval(10), inputWatts: 0)], to: url)
+        let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        let loaded = PowerLogFile.load(from: url, since: now.addingTimeInterval(-3600))
+        check(text.hasPrefix(PowerLogFile.header + "\n") && text.split(separator: "\n").count == 4
+              && loaded.map(\.date) == [now, now.addingTimeInterval(10)] && loaded.last?.connected == false,
+              "the log gets one header, appends samples and loads only the recent ones in order")
+    }
+
     static func main() {
         // String checks below are written in Traditional Chinese; pin it so the host language doesn't matter.
         L10n.overrideForTesting(.zhHant)
@@ -134,6 +184,7 @@ import Foundation
         check(estimated == BatteryHealth(maximumCapacity: 85, condition: .unknown, cycleCount: 239, designCycleCount: 1000),
               "the registry gives the cycle counts and a capacity estimate from the pack's own figures")
         check(BatteryHealthService.parse(registry: ["BatteryInstalled": false]) == nil, "no installed battery means no health")
+        powerChecks()
         let profile = Data("""
         {"SPPowerDataType":[{"_name":"spbattery_information","sppower_battery_health_info":{"sppower_battery_cycle_count":239,\
         "sppower_battery_health":"Good","sppower_battery_health_maximum_capacity":"84%"}},{"_name":"sppower_ac_charger_information"}]}

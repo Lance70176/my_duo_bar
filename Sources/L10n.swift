@@ -137,6 +137,40 @@ enum L10n {
     static var chargeLimitToggle: String { pick("切換充電上限", "Turn the charge limit on or off", "充電上限を切り替え") }
     static var batterySettingsMenu: String { pick("電池設定…", "Battery Settings…", "バッテリー設定…") }
 
+    // Power adapter section and chart
+    private static func watts(_ value: Double) -> String { String(format: "%.1f W", value) }
+    private static func electrics(_ volts: Double, _ amps: Double) -> String { String(format: "%.1f V · %.2f A", volts, amps) }
+    static var powerAdapter: String { pick("電源轉接器", "Power Adapter", "電源アダプタ") }
+    static var noPowerAdapter: String { pick("未接上電源轉接器", "No Power Adapter", "電源アダプタ未接続") }
+    static func adapterRated(_ watts: Int, volts: Double?, amps: Double?) -> String {
+        let detail = volts.flatMap { v in amps.map { electrics(v, $0) } }
+        let rated = "\(watts) W" + (detail.map { pick("（\($0)）", " (\($0))", "（\($0)）") } ?? "")
+        return pick("規格 \(rated)", "Rated \(rated)", "定格 \(rated)")
+    }
+    static func adapterInput(_ value: Double, volts: Double, amps: Double) -> String {
+        let input = watts(value) + pick("（\(electrics(volts, amps))）", " (\(electrics(volts, amps)))", "（\(electrics(volts, amps))）")
+        return pick("輸入 \(input)", "Input \(input)", "入力 \(input)")
+    }
+    static func powerFlow(battery: Double, system: Double) -> String {
+        let signed = String(format: "%+.1f W", battery)
+        return pick("電池 \(signed) · 系統 \(watts(system))", "Battery \(signed) · System \(watts(system))",
+                    "バッテリー \(signed) · システム \(watts(system))")
+    }
+    static func powerInputLegend(_ value: Double?) -> String {
+        let text = value.map(watts) ?? "—"
+        return pick("輸入 \(text)", "Input \(text)", "入力 \(text)")
+    }
+    static func powerBatteryLegend(_ value: Double?) -> String {
+        let text = value.map { String(format: "%+.1f W", $0) } ?? "—"
+        return pick("電池 \(text)", "Battery \(text)", "バッテリー \(text)")
+    }
+    static var powerChartTitle: String { pick("功率變化", "Power Over Time", "電力の推移") }
+    static var powerChartStart: String { pick("30 分鐘前", "30 min ago", "30 分前") }
+    static var powerChartNow: String { pick("現在", "Now", "現在") }
+    static var powerChartEmpty: String { pick("尚無記錄", "No readings yet", "記録なし") }
+    static func powerChartRated(_ watts: Int) -> String { pick("上限 \(watts) W", "Max \(watts) W", "上限 \(watts) W") }
+    static var openPowerLog: String { pick("開啟功率記錄檔…", "Open Power Log…", "電力ログを開く…") }
+
     // Battery health section
     static var batteryHealth: String { pick("電池健康度", "Battery Health", "バッテリーの状態") }
     static func maximumCapacity(_ percent: Int) -> String { pick("最大容量 \(percent)%", "Maximum Capacity \(percent)%", "最大容量 \(percent)%") }

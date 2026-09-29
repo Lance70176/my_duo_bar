@@ -1,7 +1,7 @@
 import AppKit
 
 /// The Battery item in the status menu and its submenu: the charge limit switch, the levels macOS offers,
-/// the battery's health and Battery Settings. The limit is the system's own (System Settings → Battery), so it stays in effect
+/// the battery's health, the power adapter with a power chart, and Battery Settings. The limit is the system's own (System Settings → Battery), so it stays in effect
 /// after this app quits and shows the same value everywhere.
 @MainActor
 final class BatteryMenuController: NSObject, NSMenuDelegate {
@@ -29,6 +29,16 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     private let cyclesItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let healthSeparator = NSMenuItem.separator()
     private let settings = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    /// Samples the adapter and battery power for the chart and the CSV log.
+    let powerLog: PowerLogger
+    let chart = PowerChartView(width: BatteryMenuController.rowWidth)
+    private let powerHeader = NSMenuItem.sectionHeader(title: "")
+    private let adapterItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let inputItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let flowItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let chartItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let openLogItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let powerSeparator = NSMenuItem.separator()
     private let defaults: UserDefaults
     private(set) var health: BatteryHealth?
     private var healthLoaded = false
@@ -39,8 +49,9 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     private var submenuOpen = false
     private var writing = false
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, powerLog: PowerLogger = PowerLogger()) {
         self.defaults = defaults
+        self.powerLog = powerLog
         super.init()
         submenu.delegate = self
         submenu.autoenablesItems = false
@@ -58,6 +69,11 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         submenu.addItem(capacityItem)
         submenu.addItem(cyclesItem)
         submenu.addItem(healthSeparator)
+        for item in [adapterItem, inputItem, flowItem] { item.isEnabled = false }
+        chartItem.view = chart
+        openLogItem.target = self; openLogItem.action = #selector(openPowerLog)
+        for item in [powerHeader, adapterItem, inputItem, flowItem, chartItem, openLogItem, powerSeparator] { submenu.addItem(item) }
+        powerLog.onSample = { [weak self] in self?.refreshPower() }
         settings.target = self; settings.action = #selector(openBatterySettings)
         submenu.addItem(settings)
         update(status: SystemStatus())
@@ -104,6 +120,7 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         rebuild()
         reload()
         reloadHealth()
+        powerLog.sample()
     }
     func menuDidClose(_ menu: NSMenu) {
         if menu === submenu { submenuOpen = false }
@@ -154,9 +171,12 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         header.title = L10n.chargeLimit
         limitItem.title = L10n.chargeLimit
         healthHeader.title = L10n.batteryHealth
+        powerHeader.title = L10n.powerAdapter
+        openLogItem.title = L10n.openPowerLog
         settings.title = L10n.batterySettingsMenu
         rebuildLevels()
         refreshRows()
+        refreshPower()
     }
 
     /// Replaces the level rows in place; the switch row keeps its item.
@@ -210,6 +230,34 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         capacityItem.title = health?.capacityLine ?? L10n.reading
         cyclesItem.title = health?.cycleLine ?? ""
         cyclesItem.isHidden = noBattery || health == nil
+    }
+
+    /// The power section's rows: rating, live input, battery and system power, the chart and the log.
+    var powerItems: [NSMenuItem] { [adapterItem, inputItem, flowItem, chartItem, openLogItem] }
+
+    /// Shows the latest power reading. The section hides on a Mac without a built-in battery.
+    func refreshPower() {
+        let latest = powerLog.latest
+        let absent = powerLog.loaded && latest == nil
+        for item in powerItems + [powerHeader, powerSeparator] { item.isHidden = absent }
+        if let latest, let rated = latest.adapterWatts {
+            adapterItem.title = L10n.adapterRated(rated, volts: latest.adapterVolts, amps: latest.adapterAmps)
+            inputItem.title = L10n.adapterInput(latest.inputWatts, volts: latest.inputVolts, amps: latest.inputAmps)
+        } else {
+            adapterItem.title = latest == nil ? L10n.reading : L10n.noPowerAdapter
+            inputItem.isHidden = true
+        }
+        flowItem.title = latest.map { L10n.powerFlow(battery: $0.batteryWatts, system: $0.systemWatts) } ?? ""
+        if latest == nil { flowItem.isHidden = true }
+        chart.samples = powerLog.samples
+        openLogItem.isEnabled = powerLog.fileURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+    }
+
+    /// Opens the CSV log in the app that handles spreadsheets (Numbers by default).
+    @objc private func openPowerLog() {
+        guard let url = powerLog.fileURL else { return }
+        closeMenus()
+        NSWorkspace.shared.open(url)
     }
 
     private func closeMenus() {

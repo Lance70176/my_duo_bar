@@ -505,7 +505,10 @@ extension PanelTests {
         defaults.removePersistentDomain(forName: suite)
         defer { defaults.removePersistentDomain(forName: suite) }
         let fake = FakeChargeLimitService(ChargeLimitState(supported: true, enabled: true, limit: 80, levels: [80, 85, 90, 95]))
-        let menu = BatteryMenuController(defaults: defaults)
+        let power = FakePowerReader(PowerSample(date: Date(), adapterWatts: 45, adapterVolts: 20, adapterAmps: 2.25,
+                                                 inputWatts: 43.44, inputVolts: 19.4, inputAmps: 2.24,
+                                                 batteryWatts: 27.25, systemWatts: 16.2, percent: 87, updateTime: 1))
+        let menu = BatteryMenuController(defaults: defaults, powerLog: PowerLogger(reader: power, fileURL: nil))
         menu.service = fake
         let healthFake = FakeBatteryHealthService(BatteryHealth(maximumCapacity: 84, condition: .normal, cycleCount: 239, designCycleCount: 1000))
         menu.healthService = healthFake
@@ -536,6 +539,21 @@ extension PanelTests {
               && menu.levelRows.map(\.title) == menu.levelItems.map(\.title) && menu.levelRows.allSatisfy(\.isEnabled),
               "every level macOS offers is listed as a row with the active one checked")
         check(menu.limitRow.toggleSwitch.isOn && menu.limitRow.detailText == "充到 80% 就停止充電", "the switch is on and names the limit")
+        check(menu.powerItems.map(\.title) == ["規格 45 W（20.0 V · 2.25 A）", "輸入 43.4 W（19.4 V · 2.24 A）",
+                                               "電池 +27.2 W · 系統 16.2 W", "", "開啟功率記錄檔…"]
+              && menu.powerItems.allSatisfy { !$0.isHidden } && menu.powerItems[3].view === menu.chart
+              && menu.chart.samples.count == 1 && !menu.powerItems[4].isEnabled
+              && menu.submenu.items.contains { $0.isSectionHeader && $0.title == "電源轉接器" },
+              "the power section shows the adapter rating, the live input, the power flow and the chart")
+        menu.powerLog.sample()
+        spin(0.2)
+        check(menu.chart.samples.count == 1, "a reading macOS has not refreshed is not added again")
+        power.sample = PowerSample(date: Date().addingTimeInterval(10), systemWatts: 15, percent: 87)
+        menu.powerLog.sample()
+        spin(0.2)
+        check(menu.powerItems[0].title == "未接上電源轉接器" && menu.powerItems[1].isHidden
+              && menu.powerItems[2].title == "電池 +0.0 W · 系統 15.0 W" && menu.chart.samples.count == 2,
+              "unplugged, the section says there is no adapter and the chart keeps its history")
         check(menu.healthItems.map(\.title) == ["最大容量 84% · 正常", "循環次數 239（設計 1000）"]
               && menu.healthItems.allSatisfy { !$0.isEnabled && !$0.isHidden }
               && menu.submenu.items.contains { $0.isSectionHeader && $0.title == "電池健康度" },
@@ -616,7 +634,7 @@ extension PanelTests {
         check(opened == [.battery, .battery], "Battery Settings opens the Battery page")
         menu.menuDidClose(menu.submenu)
 
-        let unsupported = BatteryMenuController(defaults: defaults)
+        let unsupported = BatteryMenuController(defaults: defaults, powerLog: PowerLogger(reader: FakePowerReader(nil), fileURL: nil))
         unsupported.service = FakeChargeLimitService(.unsupported)
         unsupported.healthService = FakeBatteryHealthService(nil)
         unsupported.menuWillOpen(unsupported.submenu)
@@ -625,6 +643,7 @@ extension PanelTests {
               && unsupported.levelItems.isEmpty, "without the system charge limit the switch is disabled and says why")
         check(unsupported.healthItems.allSatisfy(\.isHidden) && !unsupported.submenu.items.contains { $0.isSectionHeader && $0.title == "電池健康度" && !$0.isHidden },
               "without a built-in battery the health section is hidden")
+        check(unsupported.powerItems.allSatisfy(\.isHidden), "without a built-in battery the power section is hidden")
         unsupported.toggleLimit()
         spin(0.1)
         unsupported.menuDidClose(unsupported.submenu)
@@ -793,6 +812,17 @@ final class FakeSleepService: SleepGuarding, @unchecked Sendable {
 }
 
 /// In-memory charge limit for tests.
+final class FakePowerReader: PowerReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _sample: PowerSample?
+    init(_ sample: PowerSample?) { _sample = sample }
+    var sample: PowerSample? {
+        get { lock.withLock { _sample } }
+        set { lock.withLock { _sample = newValue } }
+    }
+    func read() -> PowerSample? { sample }
+}
+
 final class FakeBatteryHealthService: BatteryHealthReading, @unchecked Sendable {
     private let lock = NSLock()
     private let health: BatteryHealth?
