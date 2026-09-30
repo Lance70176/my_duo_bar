@@ -161,7 +161,18 @@ enum L10n {
     static var powerChartTitle: String { pick("功率變化", "Power Over Time", "電力の推移") }
     static var powerChartEmpty: String { pick("尚無記錄", "No readings yet", "記録なし") }
     static func powerChartRated(_ watts: Int) -> String { pick("上限 \(watts) W", "Max \(watts) W", "上限 \(watts) W") }
-    static var openPowerLog: String { pick("開啟功率記錄檔…", "Open Power Log…", "電力ログを開く…") }
+    static var powerHistoryMenu: String { pick("功率記錄…", "Power History…", "電力の履歴…") }
+    static var powerHistoryTitle: String { pick("功率記錄", "Power History", "電力の履歴") }
+    static var powerHistoryLatest: String { pick("最新", "Latest", "最新") }
+    static var powerHistoryHint: String {
+        pick("拖曳查看時間 · 捏合或上下捲動縮放", "Drag to move through time · Pinch or scroll to zoom", "ドラッグで時間を移動 · ピンチまたはスクロールで拡大縮小")
+    }
+    /// A range button: "2 小時" up to "24 小時", then whole days such as "7 天".
+    static func powerRange(_ seconds: TimeInterval) -> String {
+        let hours = Int(seconds / 3600)
+        if hours < 48 || hours % 24 != 0 { return pick("\(hours) 小時", "\(hours) hr", "\(hours) 時間") }
+        return pick("\(hours / 24) 天", "\(hours / 24) d", "\(hours / 24) 日")
+    }
 
     // Battery health section
     static var batteryHealth: String { pick("電池健康度", "Battery Health", "バッテリーの状態") }

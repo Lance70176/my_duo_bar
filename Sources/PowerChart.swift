@@ -3,15 +3,27 @@ import AppKit
 /// The power chart in the Battery submenu: adapter input and battery charge power over the last two hours,
 /// the battery level on its own 0–100% scale, and the adapter's rating as a dashed line. Pointing at the chart
 /// shows a crosshair and puts that moment's figures in the legend. Drawn by hand so it stays in the menu's colors.
+/// In the menu a click opens the history window; there (`interactive`) dragging pans and pinching or scrolling zooms.
 final class PowerChartView: NSView {
     static let height: CGFloat = 150
-    static let span = PowerLogger.chartSpan
     /// Readings further apart than this (sleep, app not running) break the line; macOS refreshes about every 30 seconds.
     static let gap: TimeInterval = 120
+    static let minimumSpan: TimeInterval = 10 * 60
+    static let maximumSpan: TimeInterval = 14 * 86400
 
     var samples: [PowerSample] = [] { didSet { needsDisplay = true; updateAccessibility() } }
-    /// The chart's right edge; the latest sample's time unless set.
-    var now: Date?
+    /// The time the chart spans, ending at `now`.
+    var span: TimeInterval = PowerLogger.chartSpan { didSet { needsDisplay = true } }
+    /// The chart's right edge; nil follows the latest reading.
+    var now: Date? { didSet { needsDisplay = true } }
+    /// Dragging pans and pinching or scrolling zooms; a click does not open anything.
+    var interactive = false
+    var fontSize: CGFloat = 10 { didSet { needsDisplay = true } }
+    /// Called on a click when not interactive.
+    var onClick: (() -> Void)?
+    /// Called after a drag, scroll or pinch changes the span or the right edge.
+    var onViewChange: (() -> Void)?
+    private var dragOrigin: CGFloat?
     /// Where the pointer is, in view coordinates; nil when it is outside the chart.
     var hoverX: CGFloat? { didSet { if hoverX != oldValue { needsDisplay = true } } }
     override var allowsVibrancy: Bool { true }
@@ -29,13 +41,21 @@ final class PowerChartView: NSView {
     static var levelColor: NSColor { .systemGreen }
 
     /// The plot area inside the view: the legend sits above it and the time labels below.
-    var plot: NSRect { NSRect(x: 14, y: 18, width: bounds.width - 28, height: bounds.height - 42) }
+    var plot: NSRect {
+        NSRect(x: 14, y: fontSize + 8, width: bounds.width - 28, height: bounds.height - fontSize * 2 - 22)
+    }
+
+    /// The chart's right edge: `now`, or the latest reading.
+    var end: Date { now ?? samples.last?.date ?? Date() }
 
     /// The samples in the window, and the top of the watt scale: a quarter above the rating or the highest
     /// reading, rounded up to 10 W, so the rating line stays clear of the scale label.
     func visible() -> (samples: [PowerSample], end: Date, top: Double) {
-        let end = now ?? samples.last?.date ?? Date()
-        let shown = samples.filter { $0.date >= end.addingTimeInterval(-Self.span) && $0.date <= end }
+        let end = self.end, start = end.addingTimeInterval(-span)
+        // Samples are in time order: find the window by binary search, not a scan of a week of readings.
+        let first = samples.partitioningIndex { $0.date >= start }
+        let last = samples.partitioningIndex { $0.date > end }
+        let shown = Array(samples[first..<max(first, last)])
         let highest = shown.map { max($0.inputWatts, $0.batteryWatts, Double($0.adapterWatts ?? 0)) }.max() ?? 0
         return (shown, end, max(10, (highest * 1.25 / 10).rounded(.up) * 10))
     }
@@ -44,7 +64,7 @@ final class PowerChartView: NSView {
     func sample(atX x: CGFloat) -> PowerSample? {
         let (shown, end, _) = visible()
         let fraction = Double(max(0, min(1, (x - plot.minX) / plot.width)))
-        let time = end.addingTimeInterval(-Self.span * (1 - fraction))
+        let time = end.addingTimeInterval(-span * (1 - fraction))
         guard let nearest = shown.min(by: { abs($0.date.timeIntervalSince(time)) < abs($1.date.timeIntervalSince(time)) }),
               abs(nearest.date.timeIntervalSince(time)) <= Self.gap else { return nil }
         return nearest
@@ -56,10 +76,45 @@ final class PowerChartView: NSView {
         return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
     }
 
+    /// A time label for this span: the clock time, with the date ("9/30 00:20") once the span nears a day.
+    func timeLabel(_ date: Date) -> String {
+        guard span >= 20 * 3600 else { return Self.clock(date) }
+        let c = Calendar.current.dateComponents([.month, .day], from: date)
+        return "\(c.month ?? 0)/\(c.day ?? 0) " + Self.clock(date)
+    }
+
+    // MARK: Panning and zooming
+
+    /// Moves the chart by a distance in points; dragging right shows earlier readings. Reaching the latest
+    /// reading goes back to following it.
+    func pan(by points: CGFloat) {
+        guard plot.width > 0 else { return }
+        let seconds = -Double(points / plot.width) * span
+        setEnd(end.addingTimeInterval(seconds))
+    }
+
+    /// Scales the span by `factor` (above 1 shows more time) keeping the time under `anchorX` in place.
+    func zoom(by factor: Double, anchorX: CGFloat? = nil) {
+        let anchor = Double(max(0, min(1, ((anchorX ?? plot.maxX) - plot.minX) / max(1, plot.width))))
+        let anchorTime = end.addingTimeInterval(-span * (1 - anchor))
+        let newSpan = max(Self.minimumSpan, min(Self.maximumSpan, span * factor))
+        span = newSpan
+        setEnd(anchorTime.addingTimeInterval(newSpan * (1 - anchor)))
+    }
+
+    /// Clamps a new right edge between a little after the first reading and the latest one.
+    private func setEnd(_ date: Date) {
+        guard let first = samples.first?.date, let latest = samples.last?.date else { now = nil; return }
+        let earliest = min(latest, first.addingTimeInterval(span * 0.1))
+        now = date >= latest ? nil : max(earliest, date)
+        onViewChange?()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         let (shown, end, top) = visible()
         let plot = self.plot
-        let secondary: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.secondaryLabelColor]
+        let secondary: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: fontSize), .foregroundColor: NSColor.secondaryLabelColor]
+        let rowTop = bounds.height - fontSize - 6
         let hovered = hoverX.flatMap { sample(atX: $0) }
         let focus = hovered ?? shown.last
 
@@ -69,9 +124,9 @@ final class PowerChartView: NSView {
                               (Self.chargeColor, L10n.powerBatteryLegend(focus?.batteryWatts)),
                               (Self.levelColor, L10n.powerLevelLegend(focus?.percent))] {
             color.setFill()
-            NSBezierPath(ovalIn: NSRect(x: x, y: bounds.height - 13, width: 7, height: 7)).fill()
+            NSBezierPath(ovalIn: NSRect(x: x, y: rowTop + 3, width: 7, height: 7)).fill()
             let label = NSAttributedString(string: text, attributes: secondary)
-            label.draw(at: NSPoint(x: x + 10, y: bounds.height - 16))
+            label.draw(at: NSPoint(x: x + 10, y: rowTop))
             x += 10 + label.size().width + 10
         }
 
@@ -86,20 +141,20 @@ final class PowerChartView: NSView {
         midLine.lineWidth = 1
         NSColor.labelColor.withAlphaComponent(0.08).setStroke()
         midLine.stroke()
-        NSAttributedString(string: "\(Int(top)) W", attributes: secondary).draw(at: NSPoint(x: plot.minX + 4, y: plot.maxY - 14))
+        NSAttributedString(string: "\(Int(top)) W", attributes: secondary).draw(at: NSPoint(x: plot.minX + 4, y: plot.maxY - fontSize - 4))
         let full = NSAttributedString(string: "100%", attributes: secondary)
-        full.draw(at: NSPoint(x: plot.maxX - full.size().width - 4, y: plot.maxY - 14))
+        full.draw(at: NSPoint(x: plot.maxX - full.size().width - 4, y: plot.maxY - fontSize - 4))
 
         // Time along the bottom: clock times at the ends and the middle, or the pointer's time while pointing.
         if let hovered, let hoverX {
-            let label = NSAttributedString(string: Self.clock(hovered.date), attributes: [.font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+            let label = NSAttributedString(string: timeLabel(hovered.date), attributes: [.font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
                                                                                           .foregroundColor: NSColor.labelColor])
             let left = max(plot.minX, min(plot.maxX - label.size().width, hoverX - label.size().width / 2))
             label.draw(at: NSPoint(x: left, y: 2))
         } else {
-            let start = NSAttributedString(string: Self.clock(end.addingTimeInterval(-Self.span)), attributes: secondary)
-            let middle = NSAttributedString(string: Self.clock(end.addingTimeInterval(-Self.span / 2)), attributes: secondary)
-            let last = NSAttributedString(string: Self.clock(end), attributes: secondary)
+            let start = NSAttributedString(string: timeLabel(end.addingTimeInterval(-span)), attributes: secondary)
+            let middle = NSAttributedString(string: timeLabel(end.addingTimeInterval(-span / 2)), attributes: secondary)
+            let last = NSAttributedString(string: timeLabel(end), attributes: secondary)
             start.draw(at: NSPoint(x: plot.minX, y: 2))
             middle.draw(at: NSPoint(x: plot.midX - middle.size().width / 2, y: 2))
             last.draw(at: NSPoint(x: plot.maxX - last.size().width, y: 2))
@@ -111,7 +166,7 @@ final class PowerChartView: NSView {
             return
         }
         func xPosition(_ sample: PowerSample) -> CGFloat {
-            plot.minX + plot.width * (1 - end.timeIntervalSince(sample.date) / Self.span)
+            plot.minX + plot.width * (1 - end.timeIntervalSince(sample.date) / span)
         }
         func watts(_ sample: PowerSample, _ value: Double) -> NSPoint {
             NSPoint(x: xPosition(sample), y: plot.minY + plot.height * max(0, min(1, value / top)))
@@ -155,7 +210,7 @@ final class PowerChartView: NSView {
             NSColor.secondaryLabelColor.setStroke()
             line.stroke()
             NSAttributedString(string: L10n.powerChartRated(rated), attributes: secondary)
-                .draw(at: NSPoint(x: plot.minX + 4, y: max(plot.minY + 1, y - 14)))
+                .draw(at: NSPoint(x: plot.minX + 4, y: max(plot.minY + 1, y - fontSize - 4)))
         }
 
         for (color, value) in [(Self.chargeColor, { (s: PowerSample) in max(0, s.batteryWatts) }),
@@ -208,15 +263,65 @@ final class PowerChartView: NSView {
     override func mouseMoved(with event: NSEvent) { point(at: event) }
     override func mouseExited(with event: NSEvent) { hoverX = nil }
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); hoverX = nil }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        guard interactive else { return }
+        dragOrigin = convert(event.locationInWindow, from: nil).x
+        NSCursor.closedHand.push()
+    }
+    override func mouseDragged(with event: NSEvent) {
+        guard interactive, let origin = dragOrigin else { return }
+        let x = convert(event.locationInWindow, from: nil).x
+        hoverX = nil
+        pan(by: x - origin)
+        dragOrigin = x
+    }
+    override func mouseUp(with event: NSEvent) {
+        if interactive {
+            if dragOrigin != nil { NSCursor.pop() }
+            dragOrigin = nil
+            point(at: event)
+        } else if bounds.contains(convert(event.locationInWindow, from: nil)) {
+            onClick?()
+        }
+    }
+    /// A sideways swipe pans; scrolling up and down zooms around the pointer.
+    override func scrollWheel(with event: NSEvent) {
+        guard interactive else { return super.scrollWheel(with: event) }
+        let x = convert(event.locationInWindow, from: nil).x
+        if abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) {
+            pan(by: event.scrollingDeltaX)
+        } else if event.scrollingDeltaY != 0 {
+            let step = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY / 200 : event.scrollingDeltaY / 20
+            zoom(by: exp(Double(-step)), anchorX: x)
+        }
+    }
+    override func magnify(with event: NSEvent) {
+        guard interactive else { return }
+        zoom(by: exp(Double(-event.magnification)), anchorX: convert(event.locationInWindow, from: nil).x)
+    }
 
     private func point(at event: NSEvent) {
         let location = convert(event.locationInWindow, from: nil)
-        hoverX = plot.insetBy(dx: 0, dy: -18).contains(location) ? location.x : nil
+        hoverX = dragOrigin == nil && plot.insetBy(dx: 0, dy: -18).contains(location) ? location.x : nil
     }
 
     private func updateAccessibility() {
         let last = samples.last
         setAccessibilityLabel([L10n.powerChartTitle, L10n.powerInputLegend(last?.inputWatts),
                                L10n.powerBatteryLegend(last?.batteryWatts), L10n.powerLevelLegend(last?.percent)].joined(separator: ", "))
+    }
+}
+
+extension Array {
+    /// The first index where `predicate` holds, for an array where it goes from false to true once.
+    func partitioningIndex(where predicate: (Element) -> Bool) -> Int {
+        var low = 0, high = count
+        while low < high {
+            let mid = (low + high) / 2
+            if predicate(self[mid]) { high = mid } else { low = mid + 1 }
+        }
+        return low
     }
 }

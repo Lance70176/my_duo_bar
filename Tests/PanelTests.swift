@@ -516,9 +516,9 @@ extension PanelTests {
               "every level macOS offers is listed as a row with the active one checked")
         check(menu.limitRow.toggleSwitch.isOn && menu.limitRow.detailText == "充到 80% 就停止充電", "the switch is on and names the limit")
         check(menu.powerItems.map(\.title) == ["規格 45 W（20.0 V · 2.25 A）", "輸入 43.4 W（19.4 V · 2.24 A）",
-                                               "電池 +27.2 W · 系統 16.2 W", "", "開啟功率記錄檔…"]
+                                               "電池 +27.2 W · 系統 16.2 W", "", "功率記錄…"]
               && menu.powerItems.allSatisfy { !$0.isHidden } && menu.powerItems[3].view === menu.chart
-              && menu.chart.samples.count == 1 && !menu.powerItems[4].isEnabled
+              && menu.chart.samples.count == 1 && menu.powerItems[4].isEnabled
               && menu.submenu.items.contains { $0.isSectionHeader && $0.title == "電源轉接器" },
               "the power section shows the adapter rating, the live input, the power flow and the chart")
         menu.powerLog.sample()
@@ -538,6 +538,34 @@ extension PanelTests {
               && PowerChartView.clock(Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 30, hour: 0, minute: 20))!) == "00:20",
               "the crosshair legend names the level and charge power, and times read as a clock")
         chart.hoverX = nil
+
+        // The history window: a chart that pans and zooms over the readings, with range buttons.
+        let history = PowerHistoryWindowController(fileURL: nil)
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        history.chart.samples = (0..<600).map { PowerSample(date: start.addingTimeInterval(Double($0) * 30), adapterWatts: 45,
+                                                              inputWatts: 40, batteryWatts: 20, systemWatts: 20, percent: 50) }
+        history.chart.frame = NSRect(x: 0, y: 0, width: 700, height: 360)
+        history.syncControls()
+        check(history.window?.title == "功率記錄" && history.rangeControl.segmentCount == 4
+              && (0..<4).map { history.rangeControl.label(forSegment: $0) } == ["2 小時", "6 小時", "24 小時", "7 天"]
+              && history.rangeControl.selectedSegment == 0 && !history.latestButton.isEnabled,
+              "the history window opens on two hours at the latest reading")
+        let latest = history.chart.samples.last!.date
+        history.chart.pan(by: history.chart.plot.width / 2)
+        check(abs(history.chart.end.timeIntervalSince(latest) + 3600) < 1 && history.latestButton.isEnabled,
+              "dragging right by half the chart goes back an hour and offers the latest reading again")
+        history.chart.pan(by: -10_000)
+        check(history.chart.now == nil && !history.latestButton.isEnabled, "dragging past the latest reading follows it again")
+        history.chart.zoom(by: 3)
+        check(history.chart.span == 6 * 3600 && history.rangeControl.selectedSegment == 1, "zooming out three times shows six hours")
+        history.chart.zoom(by: 0.0001)
+        check(history.chart.span == PowerChartView.minimumSpan && history.rangeControl.selectedSegment == -1,
+              "zooming in stops at ten minutes")
+        check(history.chart.timeLabel(start).count <= 5, "short spans label times as a clock")
+        history.chart.span = 24 * 3600
+        check(history.chart.timeLabel(start).contains("/"), "a day or more adds the date to time labels")
+        history.add(PowerSample(date: latest.addingTimeInterval(30)))
+        check(history.chart.samples.count == 600, "readings are only added while the window is open")
         check(menu.healthItems.map(\.title) == ["最大容量 84% · 正常", "循環次數 239（設計 1000）"]
               && menu.healthItems.allSatisfy { !$0.isEnabled && !$0.isHidden }
               && menu.submenu.items.contains { $0.isSectionHeader && $0.title == "電池健康度" },

@@ -37,7 +37,9 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     private let inputItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let flowItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let chartItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private let openLogItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let historyItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    /// The power history window, made on first use.
+    private(set) var history: PowerHistoryWindowController?
     private let powerSeparator = NSMenuItem.separator()
     private let defaults: UserDefaults
     private(set) var health: BatteryHealth?
@@ -71,9 +73,15 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         submenu.addItem(healthSeparator)
         for item in [adapterItem, inputItem, flowItem] { item.isEnabled = false }
         chartItem.view = chart
-        openLogItem.target = self; openLogItem.action = #selector(openPowerLog)
-        for item in [powerHeader, adapterItem, inputItem, flowItem, chartItem, openLogItem, powerSeparator] { submenu.addItem(item) }
-        powerLog.onSample = { [weak self] in self?.refreshPower() }
+        historyItem.target = self; historyItem.action = #selector(showPowerHistory)
+        chart.onClick = { [weak self] in self?.showPowerHistory() }
+        chart.toolTip = nil
+        for item in [powerHeader, adapterItem, inputItem, flowItem, chartItem, historyItem, powerSeparator] { submenu.addItem(item) }
+        powerLog.onSample = { [weak self] in
+            guard let self else { return }
+            self.refreshPower()
+            if let latest = self.powerLog.latest { self.history?.add(latest) }
+        }
         settings.target = self; settings.action = #selector(openBatterySettings)
         submenu.addItem(settings)
         update(status: SystemStatus())
@@ -172,7 +180,8 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         limitItem.title = L10n.chargeLimit
         healthHeader.title = L10n.batteryHealth
         powerHeader.title = L10n.powerAdapter
-        openLogItem.title = L10n.openPowerLog
+        historyItem.title = L10n.powerHistoryMenu
+        history?.applyTitles()
         settings.title = L10n.batterySettingsMenu
         rebuildLevels()
         refreshRows()
@@ -233,7 +242,7 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
     }
 
     /// The power section's rows: rating, live input, battery and system power, the chart and the log.
-    var powerItems: [NSMenuItem] { [adapterItem, inputItem, flowItem, chartItem, openLogItem] }
+    var powerItems: [NSMenuItem] { [adapterItem, inputItem, flowItem, chartItem, historyItem] }
 
     /// Shows the latest power reading. The section hides on a Mac without a built-in battery.
     func refreshPower() {
@@ -250,14 +259,15 @@ final class BatteryMenuController: NSObject, NSMenuDelegate {
         flowItem.title = latest.map { L10n.powerFlow(battery: $0.batteryWatts, system: $0.systemWatts) } ?? ""
         if latest == nil { flowItem.isHidden = true }
         chart.samples = powerLog.samples
-        openLogItem.isEnabled = powerLog.fileURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
     }
 
-    /// Opens the CSV log in the app that handles spreadsheets (Numbers by default).
-    @objc private func openPowerLog() {
-        guard let url = powerLog.fileURL else { return }
+    /// Opens the power history window: the whole log on a chart that pans and zooms.
+    @objc func showPowerHistory() {
         closeMenus()
-        NSWorkspace.shared.open(url)
+        let window = history ?? PowerHistoryWindowController(fileURL: powerLog.fileURL)
+        history = window
+        // After the menu has closed, so the window can become key.
+        DispatchQueue.main.async { window.present(recent: self.powerLog.samples) }
     }
 
     private func closeMenus() {
