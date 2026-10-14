@@ -49,6 +49,8 @@ final class SmartQuitService: SmartQuitWatching {
     static let targetedIntentWindow: TimeInterval = 60
     /// Some apps replace a window by closing one first; give them a moment before counting.
     static let settleDelay: TimeInterval = 0.5
+    /// When to look for a window that was hidden rather than closed, counted from the click or key.
+    static let hiddenChecks: [TimeInterval] = [0.6, 1.5, 3]
     /// A just-launched app may not answer Accessibility calls yet.
     static let attachRetries = 5
 
@@ -230,14 +232,35 @@ final class SmartQuitService: SmartQuitWatching {
               let hit, Self.string(hit, kAXSubroleAttribute) == kAXCloseButtonSubrole else { return }
         var pid: pid_t = 0
         guard AXUIElementGetPid(hit, &pid) == .success, watches[pid] != nil else { return }
-        intent = Intent(pid: pid, window: Self.element(hit, kAXWindowAttribute), at: Date())
+        record(Intent(pid: pid, window: Self.element(hit, kAXWindowAttribute), at: Date()))
     }
 
     /// ⌘W in the frontmost app marks its focused window.
     private func pressedClose() {
         guard rules().commandW, let app = NSWorkspace.shared.frontmostApplication,
               let watch = watches[app.processIdentifier] else { return }
-        intent = Intent(pid: watch.pid, window: Self.element(watch.element, kAXFocusedWindowAttribute), at: Date())
+        record(Intent(pid: watch.pid, window: Self.element(watch.element, kAXFocusedWindowAttribute), at: Date()))
+    }
+
+    /// Some apps (Discord and other Electron apps) only hide a window on close instead of destroying it,
+    /// so no destroy notification comes. Look again a few times after the click or key.
+    private func record(_ new: Intent) {
+        intent = new
+        guard new.window != nil else { return }
+        for delay in Self.hiddenChecks {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.checkHidden(new) }
+        }
+    }
+
+    /// The window the user closed still exists but is no longer listed: it was hidden, which counts as closed.
+    private func checkHidden(_ expected: Intent) {
+        guard let current = intent, current.at == expected.at, let aimed = current.window,
+              let watch = watches[current.pid], Self.exists(aimed),
+              let open = Self.standardWindows(of: watch.element), !open.contains(where: { CFEqual($0, aimed) }),
+              Self.bool(aimed, kAXMinimizedAttribute) != true else { return }
+        intent = nil
+        watch.windows.removeAll { CFEqual($0, aimed) }
+        quitIfEmpty(watch)
     }
 
     // MARK: Accessibility helpers
@@ -253,6 +276,12 @@ final class SmartQuitService: SmartQuitWatching {
     private static func exists(_ element: AXUIElement) -> Bool {
         var value: CFTypeRef?
         return AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value) != .invalidUIElement
+    }
+
+    private static func bool(_ element: AXUIElement, _ attribute: String) -> Bool? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
+        return value as? Bool
     }
 
     private static func string(_ element: AXUIElement, _ attribute: String) -> String? {

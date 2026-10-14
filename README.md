@@ -182,6 +182,7 @@
 
 注意事項：
 
+- 關閉時只把視窗藏起來、留在背景的 App（例如 Discord）也適用：你關掉的視窗消失後沒有其他視窗，就會結束它。
 - 只有你親手關閉的視窗才算：App 自己關掉的視窗、偏好設定以外的面板、浮動視窗不會觸發退出。Finder 一律不會被結束。
 - macOS 的輔助使用介面只列出目前桌面（Space）上的視窗。MyDuoBar 會記住你切換過去時看到的視窗，但如果某個 App 在你從未切換過去的其他桌面還開著視窗，關掉目前桌面上它的最後一個視窗仍可能結束它。
 - MyDuoBar 使用臨時簽章，每次更新版本後 macOS 會把它當成新的 App：請到「輔助使用」清單把舊的 MyDuoBar 移除後重新允許。
@@ -240,8 +241,8 @@ Wi-Fi、電池、防止休眠、智能退出、VPN、藍牙與聲音都往右展
 ```
 
 - App：`build/MyDuoBar.app`
-- 安裝磁碟映像：`dist/MyDuoBar-1.18.0-universal.dmg`
-- 壓縮檔：`dist/MyDuoBar-1.18.0-universal.zip`
+- 安裝磁碟映像：`dist/MyDuoBar-1.18.1-universal.dmg`
+- 壓縮檔：`dist/MyDuoBar-1.18.1-universal.zip`
 
 `scripts/toolchain.sh` 會依序檢查 `xcode-select` 指定的開發者目錄與 Command Line Tools，挑出第一組能以 Swift 6 編譯 macOS 27 SDK 的組合。可用下列環境變數覆寫：
 
