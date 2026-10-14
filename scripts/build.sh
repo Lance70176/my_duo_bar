@@ -27,7 +27,12 @@ for DUOBAR_LPROJ in zh-Hant en ja; do
     /usr/bin/plutil -lint "$DUOBAR_APP/Contents/Resources/$DUOBAR_LPROJ.lproj/InfoPlist.strings"
 done
 /usr/bin/plutil -lint "$DUOBAR_APP/Contents/Info.plist"
-/usr/bin/codesign --force --sign - "$DUOBAR_APP"
+# Sign with a stable identity when one is available: macOS keys Accessibility access to the signature,
+# and an ad-hoc signature changes with every build, so the permission would have to be granted again.
+# Set DUOBAR_SIGN_IDENTITY to choose one, or to "-" for an ad-hoc signature.
+DUOBAR_SIGN_IDENTITY="${DUOBAR_SIGN_IDENTITY:-$(/usr/bin/security find-identity -v -p codesigning 2>/dev/null | /usr/bin/awk -F'"' '/Apple Development|Developer ID Application/ { print $2; exit }')}"
+/usr/bin/codesign --force --timestamp=none --sign "${DUOBAR_SIGN_IDENTITY:--}" "$DUOBAR_APP"
+printf 'Signed: %s\n' "${DUOBAR_SIGN_IDENTITY:--}"
 "$DUOBAR_ROOT/scripts/verify-app.sh" "$DUOBAR_APP"
 # Replace only the generated app, after the fresh bundle has passed validation.
 rm -rf "$DUOBAR_BUILD/MyDuoBar.app"

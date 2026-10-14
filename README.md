@@ -57,7 +57,7 @@
 
 建置後把 `build/MyDuoBar.app` 拖進「應用程式」資料夾，再從「應用程式」開啟。也可以使用 `dist/` 裡的 DMG 或 ZIP。
 
-本機建置的 App 使用臨時簽章，沒有 Developer ID 簽名，也沒有經過 Apple 公證。在自己電腦上建置的版本可以直接開啟。若是從其他電腦複製過來而被 macOS 阻擋，請先嘗試開啟一次，再到「系統設定 → 隱私權與安全性」按「強制打開」。
+本機建置時，若鑰匙圈中有 Apple Development 或 Developer ID 憑證就用它簽章，否則使用臨時簽章；App 沒有經過 Apple 公證。在自己電腦上建置的版本可以直接開啟。若是從其他電腦複製過來而被 macOS 阻擋，請先嘗試開啟一次，再到「系統設定 → 隱私權與安全性」按「強制打開」。
 
 ## 語言
 
@@ -182,10 +182,10 @@
 
 注意事項：
 
-- 關閉時只把視窗藏起來、留在背景的 App（例如 Discord）也適用：你關掉的視窗消失後沒有其他視窗，就會結束它。
+- 關閉時只把視窗藏起來、留在背景的 App 也適用：被關的視窗從清單消失、移出畫面，或 App 把自己整個隱藏（Discord 就是這樣），且沒有其他視窗時，就會結束它。
 - 只有你親手關閉的視窗才算：App 自己關掉的視窗、偏好設定以外的面板、浮動視窗不會觸發退出。Finder 一律不會被結束。
 - macOS 的輔助使用介面只列出目前桌面（Space）上的視窗。MyDuoBar 會記住你切換過去時看到的視窗，但如果某個 App 在你從未切換過去的其他桌面還開著視窗，關掉目前桌面上它的最後一個視窗仍可能結束它。
-- MyDuoBar 使用臨時簽章，每次更新版本後 macOS 會把它當成新的 App：請到「輔助使用」清單把舊的 MyDuoBar 移除後重新允許。
+- 用固定的開發者憑證簽章時，更新版本後輔助使用權限會保留。若是臨時簽章的版本，macOS 會把每次更新當成新的 App：在「輔助使用」清單看起來仍是開啟，實際上沒有權限。可執行 `tccutil reset Accessibility com.rex.myduobar` 清除後重新允許。
 
 ## 第一次使用
 
@@ -241,8 +241,8 @@ Wi-Fi、電池、防止休眠、智能退出、VPN、藍牙與聲音都往右展
 ```
 
 - App：`build/MyDuoBar.app`
-- 安裝磁碟映像：`dist/MyDuoBar-1.18.1-universal.dmg`
-- 壓縮檔：`dist/MyDuoBar-1.18.1-universal.zip`
+- 安裝磁碟映像：`dist/MyDuoBar-1.18.2-universal.dmg`
+- 壓縮檔：`dist/MyDuoBar-1.18.2-universal.zip`
 
 `scripts/toolchain.sh` 會依序檢查 `xcode-select` 指定的開發者目錄與 Command Line Tools，挑出第一組能以 Swift 6 編譯 macOS 27 SDK 的組合。可用下列環境變數覆寫：
 

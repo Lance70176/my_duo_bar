@@ -1,5 +1,9 @@
 import AppKit
 import ApplicationServices
+import os
+
+/// Read with `log stream --predicate 'subsystem == "com.rex.myduobar"' --info`.
+private let smartQuitLog = Logger(subsystem: "com.rex.myduobar", category: "SmartQuit")
 
 /// What Smart Quit acts on, read again each time a window closes so a change in the menu applies at once.
 struct SmartQuitRules: Sendable, Equatable {
@@ -72,6 +76,8 @@ final class SmartQuitService: SmartQuitWatching {
         let pid: pid_t
         let window: AXUIElement?
         let at: Date
+        /// Whether the app was already hidden (⌘H): an app that hides itself on close counts as closed.
+        var appWasHidden = false
     }
 
     private var watches: [pid_t: Watch] = [:]
@@ -92,8 +98,9 @@ final class SmartQuitService: SmartQuitWatching {
     func start(rules: @escaping @MainActor () -> SmartQuitRules) -> Bool {
         self.rules = rules
         guard !isRunning else { return true }
-        guard isTrusted else { return false }
+        guard isTrusted else { smartQuitLog.info("not started: Accessibility access missing"); return false }
         isRunning = true
+        smartQuitLog.info("started")
         AXUIElementSetMessagingTimeout(systemWide, 0.25)
         let center = NSWorkspace.shared.notificationCenter
         tokens.append(center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] note in
@@ -146,7 +153,10 @@ final class SmartQuitService: SmartQuitWatching {
               pid != ProcessInfo.processInfo.processIdentifier,
               !SmartQuitRules.alwaysKept.contains(app.bundleIdentifier ?? "") else { return }
         var created: AXObserver?
-        guard AXObserverCreate(pid, smartQuitCallback, &created) == .success, let observer = created else { return }
+        guard AXObserverCreate(pid, smartQuitCallback, &created) == .success, let observer = created else {
+            smartQuitLog.info("cannot observe \(app.bundleIdentifier ?? "?", privacy: .public)")
+            return
+        }
         let element = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(element, 0.5)
         let watch = Watch(app: app, element: element, observer: observer)
@@ -159,8 +169,10 @@ final class SmartQuitService: SmartQuitWatching {
             return
         }
         watches[pid] = watch
+        smartQuitLog.info("watching \(app.bundleIdentifier ?? "?", privacy: .public)")
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
         scan(watch)
+        smartQuitLog.info("\(app.bundleIdentifier ?? "?", privacy: .public) has \(watch.windows.count) standard windows")
     }
 
     private func detach(_ pid: pid_t) {
@@ -199,8 +211,12 @@ final class SmartQuitService: SmartQuitWatching {
         watch.windows.removeAll { CFEqual($0, window) }
         guard watch.windows.count < before else { return }
         let closedAt = Date()
+        smartQuitLog.info("window destroyed in \(watch.app.bundleIdentifier ?? "?", privacy: .public)")
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleDelay) { [weak self] in
-            guard let self, self.askedToClose(window, of: watch, at: closedAt) else { return }
+            guard let self, self.askedToClose(window, of: watch, at: closedAt) else {
+                smartQuitLog.info("not asked by the user, kept running")
+                return
+            }
             self.intent = nil
             self.quitIfEmpty(watch)
         }
@@ -213,12 +229,21 @@ final class SmartQuitService: SmartQuitWatching {
         return abs(gap) < Self.intentWindow
     }
 
-    private func quitIfEmpty(_ watch: Watch) {
-        guard isRunning, watches[watch.pid] === watch, !watch.app.isTerminated,
-              rules().allows(bundleID: watch.app.bundleIdentifier) else { return }
+    /// `closed` is a window the user closed that the app only hid: it may still be listed.
+    private func quitIfEmpty(_ watch: Watch, ignoring closed: AXUIElement? = nil) {
+        let id = watch.app.bundleIdentifier ?? "?"
+        guard isRunning, watches[watch.pid] === watch, !watch.app.isTerminated else { return }
+        guard rules().allows(bundleID: watch.app.bundleIdentifier) else { smartQuitLog.info("\(id, privacy: .public) is an exception"); return }
         scan(watch)
+        let isClosed: (AXUIElement) -> Bool = { window in closed.map { CFEqual($0, window) } ?? false }
+        watch.windows.removeAll(where: isClosed)
         // An unanswered query is not "no windows": only quit on a confirmed empty list.
-        guard watch.windows.isEmpty, let open = Self.standardWindows(of: watch.element), open.isEmpty else { return }
+        let open = Self.standardWindows(of: watch.element)?.filter { !isClosed($0) }
+        guard watch.windows.isEmpty, let open, open.isEmpty else {
+            smartQuitLog.info("\(id, privacy: .public) still has windows: tracked \(watch.windows.count), listed \(open.map { "\($0.count)" } ?? "no answer", privacy: .public)")
+            return
+        }
+        smartQuitLog.info("quitting \(id, privacy: .public)")
         watch.app.terminate()
     }
 
@@ -229,7 +254,12 @@ final class SmartQuitService: SmartQuitWatching {
         guard let primary = NSScreen.screens.first else { return }
         var hit: AXUIElement?
         guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(primary.frame.maxY - point.y), &hit) == .success,
-              let hit, Self.string(hit, kAXSubroleAttribute) == kAXCloseButtonSubrole else { return }
+              let hit else { return }
+        let subrole = Self.string(hit, kAXSubroleAttribute)
+        if subrole != kAXCloseButtonSubrole {
+            smartQuitLog.debug("click on \(Self.string(hit, kAXRoleAttribute) ?? "?", privacy: .public) \(subrole ?? "-", privacy: .public)")
+            return
+        }
         var pid: pid_t = 0
         guard AXUIElementGetPid(hit, &pid) == .success, watches[pid] != nil else { return }
         record(Intent(pid: pid, window: Self.element(hit, kAXWindowAttribute), at: Date()))
@@ -244,23 +274,33 @@ final class SmartQuitService: SmartQuitWatching {
 
     /// Some apps (Discord and other Electron apps) only hide a window on close instead of destroying it,
     /// so no destroy notification comes. Look again a few times after the click or key.
-    private func record(_ new: Intent) {
+    private func record(_ asked: Intent) {
+        var new = asked
+        new.appWasHidden = watches[new.pid]?.app.isHidden ?? false
         intent = new
+        smartQuitLog.info("close asked in \(self.watches[new.pid]?.app.bundleIdentifier ?? "?", privacy: .public), window known: \(new.window != nil)")
         guard new.window != nil else { return }
         for delay in Self.hiddenChecks {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.checkHidden(new) }
         }
     }
 
-    /// The window the user closed still exists but is no longer listed: it was hidden, which counts as closed.
+    /// The window the user closed still exists but is gone from view: dropped from the window list, moved off
+    /// screen while still listed (Electron's hide), or the whole app hid itself. Any of these counts as closed.
     private func checkHidden(_ expected: Intent) {
         guard let current = intent, current.at == expected.at, let aimed = current.window,
               let watch = watches[current.pid], Self.exists(aimed),
-              let open = Self.standardWindows(of: watch.element), !open.contains(where: { CFEqual($0, aimed) }),
-              Self.bool(aimed, kAXMinimizedAttribute) != true else { return }
+              let open = Self.standardWindows(of: watch.element) else { return }
+        let id = watch.app.bundleIdentifier ?? "?"
+        let listed = open.contains { CFEqual($0, aimed) }
+        let onscreen = Self.isOnscreen(aimed)
+        let minimized = Self.bool(aimed, kAXMinimizedAttribute) == true
+        let appHid = watch.app.isHidden && !current.appWasHidden
+        smartQuitLog.info("check \(id, privacy: .public): listed \(listed), onscreen \(onscreen.map { "\($0)" } ?? "unknown", privacy: .public), minimized \(minimized), app hid itself \(appHid)")
+        guard !minimized, !listed || onscreen == false || appHid else { return }
+        smartQuitLog.info("window hidden in \(id, privacy: .public)")
         intent = nil
-        watch.windows.removeAll { CFEqual($0, aimed) }
-        quitIfEmpty(watch)
+        quitIfEmpty(watch, ignoring: aimed)
     }
 
     // MARK: Accessibility helpers
@@ -276,6 +316,18 @@ final class SmartQuitService: SmartQuitWatching {
     private static func exists(_ element: AXUIElement) -> Bool {
         var value: CFTypeRef?
         return AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value) != .invalidUIElement
+    }
+
+    /// Whether the window server shows the window; nil when its window number is unavailable.
+    /// Uses `_AXUIElementGetWindow`, which window managers rely on; looked up at run time.
+    private static func isOnscreen(_ window: AXUIElement) -> Bool? {
+        typealias GetWindow = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "_AXUIElementGetWindow") else { return nil }
+        var number: CGWindowID = 0
+        guard unsafeBitCast(symbol, to: GetWindow.self)(window, &number) == .success, number != 0,
+              let info = CGWindowListCopyWindowInfo(.optionIncludingWindow, number) as? [[String: Any]],
+              let entry = info.first else { return nil }
+        return entry[kCGWindowIsOnscreen as String] as? Bool ?? false
     }
 
     private static func bool(_ element: AXUIElement, _ attribute: String) -> Bool? {

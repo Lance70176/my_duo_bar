@@ -1,3 +1,9 @@
+# MyDuoBar 1.18.2
+
+- 修正智能退出對 Discord 無效：Discord 關閉視窗時不是銷毀或藏起視窗，而是把整個 App 隱藏（等同 ⌘H），視窗仍留在清單中。現在按關閉按鈕或 ⌘W 後，只要被關的視窗從清單消失、移出畫面，或 App 在這之後把自己隱藏，且沒有其他視窗，就會結束該 App。
+- 建置改用鑰匙圈中的 Apple Development（或 Developer ID）憑證簽章，找不到才用臨時簽章。macOS 依簽章認定輔助使用權限，臨時簽章每次建置都會變，更新後權限會失效；固定憑證簽章後，更新版本不必重新允許。可用 `DUOBAR_SIGN_IDENTITY` 指定憑證，設為 `-` 則使用臨時簽章。
+- 智能退出寫入系統日誌（subsystem `com.rex.myduobar`，category `SmartQuit`），記錄監看的 App、偵測到的關閉動作與是否結束 App 的原因，可用 `log stream --info --predicate 'subsystem == "com.rex.myduobar"'` 查看；不記錄視窗內容與按鍵。
+
 # MyDuoBar 1.18.1
 
 - 智能退出支援「關閉時只把視窗藏起來」的 App（例如 Discord 等 Electron App）：按紅色關閉按鈕或 ⌘W 後，被關的視窗若沒有被銷毀、只是從視窗清單消失，且 App 沒有其他視窗，同樣自動結束該 App。縮到 Dock 的視窗不算。
