@@ -66,11 +66,12 @@ import CoreAudio
         bluetoothChecks()
         batteryChecks()
         sleepChecks()
+        smartQuitChecks()
         L10n.overrideForTesting(nil)
         check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "the Bluetooth submenu targets Bluetooth settings")
         check(SystemSettings.Page.allCases.allSatisfy { $0.url.scheme == "x-apple.systempreferences" },
               "settings links stay within the system settings application")
-        print("PASS: native settings actions, Wi-Fi, Battery, Keep Awake, VPN, Bluetooth and Sound submenus, custom controls and network routing")
+        print("PASS: native settings actions, Wi-Fi, Battery, Keep Awake, Smart Quit, VPN, Bluetooth and Sound submenus, custom controls and network routing")
     }
 
     static func spin(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
@@ -732,6 +733,114 @@ extension PanelTests {
         menu.menuDidClose(menu.submenu)
         menu.stop()
     }
+}
+
+extension PanelTests {
+    /// Exercises the Smart Quit submenu against a fake service: no other app is ever watched or quit.
+    static func smartQuitChecks() {
+        let suite = "com.rex.myduobar.tests.smartquit"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let fake = FakeSmartQuitService()
+        let menu = SmartQuitMenuController(defaults: defaults)
+        menu.service = fake
+        var opened: [SystemSettings.Page] = []
+        menu.onOpenSettings = { opened.append($0) }
+        var front: SmartQuitMenuController.AppInfo? = .init(name: "ChatGPT", bundleID: "com.openai.chat")
+        menu.frontmost = { front }
+
+        let rules = SmartQuitRules(exceptions: ["com.spotify.client"], commandW: true)
+        check(rules.allows(bundleID: "com.google.Chrome") && !rules.allows(bundleID: "com.spotify.client")
+              && !rules.allows(bundleID: "com.apple.finder") && !rules.allows(bundleID: "com.rex.myduobar") && !rules.allows(bundleID: nil),
+              "Smart Quit skips exceptions, Finder, itself and apps without a bundle identifier")
+        check(SmartQuitRules.isCloseShortcut(characters: "w", flags: .command) && SmartQuitRules.isCloseShortcut(characters: "W", flags: [.command, .shift])
+              && SmartQuitRules.isCloseShortcut(characters: "w", flags: [.command, .capsLock])
+              && !SmartQuitRules.isCloseShortcut(characters: "w", flags: [.command, .option])
+              && !SmartQuitRules.isCloseShortcut(characters: "q", flags: .command) && !SmartQuitRules.isCloseShortcut(characters: "w", flags: []),
+              "only ⌘W and ⇧⌘W count as closing a window")
+
+        menu.activate()
+        check(menu.item.submenu === menu.submenu && menu.item.title == "智能退出" && menu.item.subtitle == "未開啟"
+              && !menu.isEnabled && !menu.isRunning && fake.calls.isEmpty, "Smart Quit starts off and does not watch anything")
+        menu.menuWillOpen(menu.submenu)
+        check(menu.submenu.items.first?.isSectionHeader == true && menu.submenu.items[1].view === menu.switchRow
+              && menu.submenu.items[2].view === menu.commandWRow && menu.keepItem.view === menu.keepRow,
+              "the submenu has a header, the switch, the ⌘W option and the quick exception")
+        check(menu.switchRow.detailText == "未開啟，關閉視窗後 App 仍在執行" && !menu.switchRow.toggleSwitch.isOn
+              && menu.commandWRow.title == "按 ⌘W 關閉時也退出" && menu.commandWRow.isChecked && !menu.commandWRow.isEnabled
+              && menu.keepRow.title == "不自動退出「ChatGPT」" && !menu.keepRow.isChecked && !menu.keepItem.isHidden
+              && menu.exceptionsItem.title == "例外 App…" && menu.accessItem.isHidden,
+              "off: the ⌘W option is on but dimmed and the frontmost app can be kept")
+
+        fake.trusted = false
+        menu.switchRow.onToggle?()
+        check(menu.isEnabled && !menu.isRunning && fake.calls == ["start", "prompt"] && opened == [.accessibility]
+              && menu.switchRow.toggleSwitch.isOn && menu.switchRow.detailText == "需要在「輔助使用」中允許 MyDuoBar"
+              && menu.item.subtitle == "需要權限" && !menu.accessItem.isHidden,
+              "without Accessibility access the switch stays on, asks for access and opens the settings page")
+        fake.trusted = true
+        menu.checkTrust()
+        check(menu.isRunning && fake.calls.last == "start" && menu.switchRow.detailText == "關閉最後一個視窗時自動結束 App"
+              && menu.item.subtitle == "已開啟" && menu.accessItem.isHidden && menu.commandWRow.isEnabled,
+              "once access is granted Smart Quit starts on its own")
+        check(fake.rules?() == SmartQuitRules(exceptions: [], commandW: true), "the service reads the current rules")
+
+        menu.commandWRow.onSelect?()
+        check(!menu.includesCommandW && !menu.commandWRow.isChecked && fake.rules?().commandW == false, "⌘W can be left out")
+        menu.keepRow.onSelect?()
+        check(menu.exceptions == ["com.openai.chat"] && menu.keepRow.isChecked && fake.rules?().exceptions == ["com.openai.chat"],
+              "the quick exception keeps the frontmost app running")
+        menu.setException("com.spotify.client", kept: true)
+        menu.showExceptions()
+        let window = menu.exceptionsController
+        check(window?.ids == ["com.openai.chat", "com.spotify.client"] && window?.table.numberOfRows == 2
+              && window?.window?.title == "智能退出例外" && window?.addButton.title == "加入 App…",
+              "the exception window lists every kept app")
+        menu.keepRow.onSelect?()
+        check(menu.exceptions == ["com.spotify.client"] && window?.table.numberOfRows == 1 && !menu.keepRow.isChecked,
+              "taking the app back out updates the menu and the window")
+        window?.close()
+
+        front = nil
+        menu.menuWillOpen(menu.submenu)
+        check(menu.keepItem.isHidden, "with no other app in front the quick exception is hidden")
+
+        L10n.overrideForTesting(.en)
+        menu.rebuild()
+        check(menu.submenu.items.first?.title == "Smart Quit" && menu.commandWRow.title == "Also Quit When Closing with ⌘W"
+              && menu.switchRow.detailText == "Quits an app when you close its last window" && L10n.smartQuitKeep("Notes") == "Keep “Notes” Running",
+              "the Smart Quit submenu follows the app language")
+        L10n.overrideForTesting(.zhHant)
+
+        menu.toggle()
+        check(!menu.isEnabled && !menu.isRunning && fake.calls.last == "stop" && menu.item.subtitle == "未開啟", "turning it off stops watching")
+        let relaunch = SmartQuitMenuController(defaults: defaults)
+        let other = FakeSmartQuitService()
+        relaunch.service = other
+        defaults.set(true, forKey: SmartQuitMenuController.enabledKey)
+        relaunch.activate()
+        check(relaunch.isRunning && other.calls == ["start"], "a switch left on starts again at launch")
+        relaunch.stop()
+        check(other.calls.last == "stop", "quitting the app stops watching")
+        check(SystemSettings.Page.accessibility.url.absoluteString == "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+              "the access link opens Privacy & Security → Accessibility")
+    }
+}
+
+@MainActor final class FakeSmartQuitService: SmartQuitWatching {
+    var trusted = true
+    var calls: [String] = []
+    var rules: (@MainActor () -> SmartQuitRules)?
+    var isTrusted: Bool { trusted }
+    func requestTrust() { calls.append("prompt") }
+    func start(rules: @escaping @MainActor () -> SmartQuitRules) -> Bool {
+        calls.append("start")
+        guard trusted else { return false }
+        self.rules = rules
+        return true
+    }
+    func stop() { calls.append("stop") }
 }
 
 final class ActionTarget: NSObject {

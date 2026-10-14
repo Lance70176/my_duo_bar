@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let panelHeader = StatusPanelHeader()
     private let batteryMenu = BatteryMenuController()
     private let sleepMenu = SleepMenuController()
+    private let smartQuitMenu = SmartQuitMenuController()
     private let wifiMenu = WiFiMenuController()
     private let vpnMenu = VPNMenuController()
     private let bluetoothMenu = BluetoothMenuController()
@@ -39,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         batteryMenu.onOpenSettings = openSettings
         sleepMenu.onOpenSettings = openSettings
+        smartQuitMenu.onOpenSettings = openSettings
         wifiMenu.onOpenSettings = openSettings
         vpnMenu.onOpenSettings = openSettings
         bluetoothMenu.onOpenSettings = openSettings
@@ -55,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(wifiMenu.item)
         menu.addItem(batteryMenu.item)
         menu.addItem(sleepMenu.item)
+        menu.addItem(smartQuitMenu.item)
         menu.addItem(vpnMenu.item)
         menu.addItem(bluetoothMenu.item)
         menu.addItem(soundMenu.item)
@@ -73,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         update(monitor.status)
         monitor.start()
+        smartQuitMenu.activate()
         let firstLaunch = !UserDefaults.standard.bool(forKey: "hasShownSetup")
         if firstLaunch { UserDefaults.standard.set(true, forKey: "hasShownSetup") }
         if firstLaunch || CommandLine.arguments.contains("--settings") {
@@ -105,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateMenuRows(_ state: SystemStatus) {
         batteryMenu.update(status: state)
         sleepMenu.refresh()
+        smartQuitMenu.refresh()
         wifiMenu.update(status: state)
         vpnMenu.update(status: state)
         bluetoothMenu.update(status: state)
@@ -145,7 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func openSystemIcons() { SystemSettings.open(.menubar) }
     @objc private func quitApp() { NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop(); sleepMenu.stop(); batteryMenu.powerLog.stop() }
+    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop(); sleepMenu.stop(); smartQuitMenu.stop(); batteryMenu.powerLog.stop() }
 }
 
 if CommandLine.arguments.contains("--diagnose") {

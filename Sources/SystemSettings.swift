@@ -2,7 +2,7 @@ import AppKit
 
 enum SystemSettings {
     enum Page: String, CaseIterable {
-        case wifi, network, battery, vpn, bluetooth, sound, menubar
+        case wifi, network, battery, vpn, bluetooth, sound, menubar, accessibility
 
         var title: String {
             switch self {
@@ -13,6 +13,7 @@ enum SystemSettings {
             case .bluetooth: return L10n.bluetoothSettings
             case .sound: return L10n.soundSettings
             case .menubar: return L10n.menuBarSettings
+            case .accessibility: return L10n.accessibilitySettings
             }
         }
 
@@ -26,6 +27,7 @@ enum SystemSettings {
             case .bluetooth: target = "com.apple.BluetoothSettings"
             case .sound: target = "com.apple.Sound-Settings.extension"
             case .menubar: target = "com.apple.ControlCenter-Settings.extension"
+            case .accessibility: target = "com.apple.preference.security?Privacy_Accessibility"
             }
             return URL(string: "x-apple.systempreferences:" + target)!
         }

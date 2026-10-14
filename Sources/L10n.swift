@@ -185,6 +185,33 @@ enum L10n {
     }
 
     // MARK: Keep awake submenu
+    static var smartQuit: String { pick("智能退出", "Smart Quit", "スマート終了") }
+    static var smartQuitOnDetail: String { pick("關閉最後一個視窗時自動結束 App", "Quits an app when you close its last window", "最後のウインドウを閉じると App を終了") }
+    static var smartQuitOffDetail: String { pick("未開啟，關閉視窗後 App 仍在執行", "Off · Apps keep running after their windows close", "オフ · ウインドウを閉じても App は動作し続けます") }
+    static var smartQuitNeedsAccess: String { pick("需要在「輔助使用」中允許 MyDuoBar", "Allow MyDuoBar in Accessibility to start", "アクセシビリティで MyDuoBar を許可してください") }
+    static var smartQuitToggle: String { pick("切換智能退出", "Turn Smart Quit on or off", "スマート終了を切り替え") }
+    static var smartQuitCommandW: String { pick("按 ⌘W 關閉時也退出", "Also Quit When Closing with ⌘W", "⌘W で閉じたときも終了") }
+    static func smartQuitKeep(_ name: String) -> String { pick("不自動退出「\(name)」", "Keep “\(name)” Running", "「\(name)」は終了しない") }
+    static var smartQuitExceptionsMenu: String { pick("例外 App…", "Exceptions…", "例外の App…") }
+    static var accessibilitySettingsMenu: String { pick("輔助使用設定…", "Accessibility Settings…", "アクセシビリティ設定…") }
+    static var accessibilitySettings: String { pick("輔助使用設定", "Accessibility Settings", "アクセシビリティ設定") }
+    static var needsAccess: String { pick("需要權限", "Needs Access", "許可が必要") }
+    static var on: String { pick("已開啟", "On", "オン") }
+    static var smartQuitExceptionsTitle: String { pick("智能退出例外", "Smart Quit Exceptions", "スマート終了の例外") }
+    static var smartQuitExceptionsHeading: String { pick("不自動退出的 App", "Apps That Keep Running", "終了しない App") }
+    static var smartQuitExceptionsNote: String {
+        pick("列表中的 App 即使關閉最後一個視窗，也會繼續在背景執行。Finder 一律不會被退出。",
+             "Apps in this list keep running in the background after their last window closes. Finder is never quit.",
+             "リストの App は最後のウインドウを閉じてもバックグラウンドで動作し続けます。Finder は終了しません。")
+    }
+    static var smartQuitExceptionsFooter: String {
+        pick("其他 App 在你關閉最後一個標準視窗時會自動退出",
+             "Other apps quit when you close their last standard window",
+             "ほかの App は最後の標準ウインドウを閉じると終了します")
+    }
+    static var smartQuitExceptionsEmpty: String { pick("尚未加入任何 App", "No Apps Yet", "App はまだありません") }
+    static var addApp: String { pick("加入 App…", "Add App…", "App を追加…") }
+    static var remove: String { pick("移除", "Remove", "削除") }
     static var keepAwake: String { pick("防止休眠", "Keep Awake", "スリープ防止") }
     static var keepAwakeIndefinite: String { pick("已開啟 · 直到關閉", "On · Until turned off", "オン · オフにするまで") }
     static func keepAwakeRemaining(_ minutes: Int) -> String {
