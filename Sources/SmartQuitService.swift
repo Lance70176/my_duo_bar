@@ -57,18 +57,23 @@ final class SmartQuitService: SmartQuitWatching {
     static let hiddenChecks: [TimeInterval] = [0.6, 1.5, 3]
     /// A just-launched app may not answer Accessibility calls yet.
     static let attachRetries = 5
+    /// A window without a close button of its own (Steam) draws one in its top strip this tall.
+    static let titleStripHeight: CGFloat = 32
 
     fileprivate final class Watch {
         let app: NSRunningApplication
+        /// The app to quit: `app` itself, or the app a window-owning helper is bundled in (Steam Helper → Steam).
+        let owner: NSRunningApplication
+        /// The real process, which can differ from `app.processIdentifier`; see `processID(of:)`.
+        let pid: pid_t
         let element: AXUIElement
         let observer: AXObserver
         weak var service: SmartQuitService?
         /// Standard windows with a destroy notification registered, including ones on other Spaces seen earlier.
         var windows: [AXUIElement] = []
-        init(app: NSRunningApplication, element: AXUIElement, observer: AXObserver) {
-            self.app = app; self.element = element; self.observer = observer
+        init(app: NSRunningApplication, owner: NSRunningApplication, pid: pid_t, element: AXUIElement, observer: AXObserver) {
+            self.app = app; self.owner = owner; self.pid = pid; self.element = element; self.observer = observer
         }
-        var pid: pid_t { app.processIdentifier }
         var refcon: UnsafeMutableRawPointer { Unmanaged.passUnretained(self).toOpaque() }
     }
 
@@ -108,14 +113,14 @@ final class SmartQuitService: SmartQuitWatching {
             MainActor.assumeIsolated { if let app { self?.attach(app, retries: Self.attachRetries) } }
         })
         tokens.append(center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] note in
-            let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
-            MainActor.assumeIsolated { if let pid { self?.detach(pid) } }
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated { if let app { self?.detach(app) } }
         })
         tokens.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             MainActor.assumeIsolated {
                 guard let self, let app else { return }
-                if let watch = self.watches[app.processIdentifier] { self.scan(watch) } else { self.attach(app, retries: 0) }
+                if let watch = self.watch(for: app) { self.scan(watch) } else { self.attach(app, retries: 0) }
             }
         })
         // Accessibility lists only the current Space's windows, so pick up the others as the user visits them.
@@ -148,21 +153,26 @@ final class SmartQuitService: SmartQuitWatching {
     // MARK: Watching apps
 
     private func attach(_ app: NSRunningApplication, retries: Int) {
-        let pid = app.processIdentifier
-        guard isRunning, watches[pid] == nil, !app.isTerminated, app.activationPolicy == .regular,
-              pid != ProcessInfo.processInfo.processIdentifier,
-              !SmartQuitRules.alwaysKept.contains(app.bundleIdentifier ?? "") else { return }
+        guard isRunning, !app.isTerminated, !SmartQuitRules.alwaysKept.contains(app.bundleIdentifier ?? ""),
+              let owner = app.activationPolicy == .regular ? app : Self.hostApp(of: app) else { return }
+        guard let pid = Self.processID(of: app) else {
+            smartQuitLog.info("no process for \(app.bundleIdentifier ?? "?", privacy: .public)")
+            return
+        }
+        guard watches[pid] == nil,
+              pid != ProcessInfo.processInfo.processIdentifier else { return }
         var created: AXObserver?
-        guard AXObserverCreate(pid, smartQuitCallback, &created) == .success, let observer = created else {
-            smartQuitLog.info("cannot observe \(app.bundleIdentifier ?? "?", privacy: .public)")
+        let result = AXObserverCreate(pid, smartQuitCallback, &created)
+        guard result == .success, let observer = created else {
+            smartQuitLog.info("cannot observe \(app.bundleIdentifier ?? "?", privacy: .public): \(result.rawValue)")
             return
         }
         let element = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(element, 0.5)
-        let watch = Watch(app: app, element: element, observer: observer)
+        let watch = Watch(app: app, owner: owner, pid: pid, element: element, observer: observer)
         watch.service = self
-        let result = AXObserverAddNotification(observer, element, kAXWindowCreatedNotification as CFString, watch.refcon)
-        guard result == .success || result == .notificationAlreadyRegistered else {
+        let added = AXObserverAddNotification(observer, element, kAXWindowCreatedNotification as CFString, watch.refcon)
+        guard added == .success || added == .notificationAlreadyRegistered else {
             if retries > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.attach(app, retries: retries - 1) }
             }
@@ -173,6 +183,11 @@ final class SmartQuitService: SmartQuitWatching {
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
         scan(watch)
         smartQuitLog.info("\(app.bundleIdentifier ?? "?", privacy: .public) has \(watch.windows.count) standard windows")
+    }
+
+    /// A quit app may no longer have a process to look up, so match the watch by the app itself too.
+    private func detach(_ app: NSRunningApplication) {
+        for (pid, watch) in watches where watch.app == app || pid == app.processIdentifier { detach(pid) }
     }
 
     private func detach(_ pid: pid_t) {
@@ -230,32 +245,45 @@ final class SmartQuitService: SmartQuitWatching {
     }
 
     /// `closed` is a window the user closed that the app only hid: it may still be listed.
+    /// Counts the windows of the owner app and of every helper bundled in it.
     private func quitIfEmpty(_ watch: Watch, ignoring closed: AXUIElement? = nil) {
-        let id = watch.app.bundleIdentifier ?? "?"
-        guard isRunning, watches[watch.pid] === watch, !watch.app.isTerminated else { return }
-        guard rules().allows(bundleID: watch.app.bundleIdentifier) else { smartQuitLog.info("\(id, privacy: .public) is an exception"); return }
-        scan(watch)
+        let owner = watch.owner
+        let id = owner.bundleIdentifier ?? "?"
+        guard isRunning, watches[watch.pid] === watch, !owner.isTerminated else { return }
+        guard rules().allows(bundleID: owner.bundleIdentifier) else { smartQuitLog.info("\(id, privacy: .public) is an exception"); return }
         let isClosed: (AXUIElement) -> Bool = { window in closed.map { CFEqual($0, window) } ?? false }
-        watch.windows.removeAll(where: isClosed)
-        // An unanswered query is not "no windows": only quit on a confirmed empty list.
-        let open = Self.standardWindows(of: watch.element)?.filter { !isClosed($0) }
-        guard watch.windows.isEmpty, let open, open.isEmpty else {
-            smartQuitLog.info("\(id, privacy: .public) still has windows: tracked \(watch.windows.count), listed \(open.map { "\($0.count)" } ?? "no answer", privacy: .public)")
-            return
+        for member in watches.values where member.owner == owner {
+            scan(member)
+            member.windows.removeAll(where: isClosed)
+            // An unanswered query is not "no windows": only quit on a confirmed empty list.
+            let open = Self.standardWindows(of: member.element)?.filter { !isClosed($0) }
+            guard member.windows.isEmpty, let open, open.isEmpty else {
+                smartQuitLog.info("\(member.app.bundleIdentifier ?? "?", privacy: .public) still has windows: tracked \(member.windows.count), listed \(open.map { "\($0.count)" } ?? "no answer", privacy: .public)")
+                return
+            }
         }
         smartQuitLog.info("quitting \(id, privacy: .public)")
-        watch.app.terminate()
+        if !owner.terminate() { smartQuitLog.info("\(id, privacy: .public) refused to quit") }
     }
 
     // MARK: What the user asked for
 
-    /// A click on a window's close button (the red one) marks that window as closed on purpose.
+    /// A click on a window's close button (the red one) marks that window as closed on purpose. A window that
+    /// draws its own buttons (Steam) shows no close button to Accessibility, so a click in its top strip counts.
     private func clicked(at point: NSPoint) {
         guard let primary = NSScreen.screens.first else { return }
         var hit: AXUIElement?
-        guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(primary.frame.maxY - point.y), &hit) == .success,
+        let y = primary.frame.maxY - point.y
+        guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(y), &hit) == .success,
               let hit else { return }
         let subrole = Self.string(hit, kAXSubroleAttribute)
+        if subrole == kAXStandardWindowSubrole, Self.element(hit, kAXCloseButtonAttribute) == nil,
+           let top = Self.point(hit, kAXPositionAttribute)?.y, y >= top, y < top + Self.titleStripHeight {
+            var pid: pid_t = 0
+            guard AXUIElementGetPid(hit, &pid) == .success, watches[pid] != nil else { return }
+            record(Intent(pid: pid, window: hit, at: Date()))
+            return
+        }
         if subrole != kAXCloseButtonSubrole {
             smartQuitLog.debug("click on \(Self.string(hit, kAXRoleAttribute) ?? "?", privacy: .public) \(subrole ?? "-", privacy: .public)")
             return
@@ -268,7 +296,7 @@ final class SmartQuitService: SmartQuitWatching {
     /// ⌘W in the frontmost app marks its focused window.
     private func pressedClose() {
         guard rules().commandW, let app = NSWorkspace.shared.frontmostApplication,
-              let watch = watches[app.processIdentifier] else { return }
+              let watch = watch(for: app) else { return }
         record(Intent(pid: watch.pid, window: Self.element(watch.element, kAXFocusedWindowAttribute), at: Date()))
     }
 
@@ -303,6 +331,36 @@ final class SmartQuitService: SmartQuitWatching {
         quitIfEmpty(watch, ignoring: aimed)
     }
 
+    private func watch(for app: NSRunningApplication) -> Watch? {
+        if let watch = watches[app.processIdentifier] { return watch }
+        return watches.values.first { $0.app == app }
+    }
+
+    /// The app's process. Some apps launched through a helper (Steam) report -1 to AppKit even though
+    /// LaunchServices knows the process, so find it by the executable it runs.
+    static func processID(of app: NSRunningApplication) -> pid_t? {
+        if app.processIdentifier > 0 { return app.processIdentifier }
+        guard let executable = app.executableURL?.resolvingSymlinksInPath().path else { return nil }
+        var pids = [pid_t](repeating: 0, count: 4096)
+        let count = Int(proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size)))
+        var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        for pid in pids.prefix(max(count, 0)) where pid > 0 {
+            let length = Int(proc_pidpath(pid, &path, UInt32(path.count)))
+            guard length > 0 else { continue }
+            if String(decoding: path.prefix(length).map { UInt8(bitPattern: $0) }, as: UTF8.self) == executable { return pid }
+        }
+        return nil
+    }
+
+    /// The regular app whose bundle contains this helper app's bundle, e.g. Steam for Steam Helper.
+    static func hostApp(of helper: NSRunningApplication) -> NSRunningApplication? {
+        guard helper.activationPolicy == .accessory, let path = helper.bundleURL?.standardizedFileURL.path else { return nil }
+        return NSWorkspace.shared.runningApplications.first { app in
+            guard app.activationPolicy == .regular, let host = app.bundleURL?.standardizedFileURL.path else { return false }
+            return path.hasPrefix(host.hasSuffix("/") ? host : host + "/")
+        }
+    }
+
     // MARK: Accessibility helpers
 
     /// The app's standard windows on the current Space (minimized ones included); nil when the app did not answer.
@@ -328,6 +386,14 @@ final class SmartQuitService: SmartQuitWatching {
               let info = CGWindowListCopyWindowInfo(.optionIncludingWindow, number) as? [[String: Any]],
               let entry = info.first else { return nil }
         return entry[kCGWindowIsOnscreen as String] as? Bool ?? false
+    }
+
+    private static func point(_ element: AXUIElement, _ attribute: String) -> CGPoint? {
+        var value: CFTypeRef?
+        var point = CGPoint.zero
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value,
+              CFGetTypeID(value) == AXValueGetTypeID(), AXValueGetValue(value as! AXValue, .cgPoint, &point) else { return nil }
+        return point
     }
 
     private static func bool(_ element: AXUIElement, _ attribute: String) -> Bool? {

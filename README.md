@@ -183,6 +183,7 @@
 注意事項：
 
 - 關閉時只把視窗藏起來、留在背景的 App 也適用：被關的視窗從清單消失、移出畫面，或 App 把自己整個隱藏（Discord 就是這樣），且沒有其他視窗時，就會結束它。
+- 視窗由內建輔助 App 顯示的 App 也適用，例如 Steam：主視窗屬於 Steam Helper，關掉最後一個時結束的是 Steam 本身。Steam 的紅綠燈是自己畫的，系統看不到關閉按鈕，所以對沒有原生關閉按鈕的視窗，點視窗頂端的標題列後視窗隨即消失，也算你親手關閉。
 - 只有你親手關閉的視窗才算：App 自己關掉的視窗、偏好設定以外的面板、浮動視窗不會觸發退出。Finder 一律不會被結束。
 - macOS 的輔助使用介面只列出目前桌面（Space）上的視窗。MyDuoBar 會記住你切換過去時看到的視窗，但如果某個 App 在你從未切換過去的其他桌面還開著視窗，關掉目前桌面上它的最後一個視窗仍可能結束它。
 - 用固定的開發者憑證簽章時，更新版本後輔助使用權限會保留。若是臨時簽章的版本，macOS 會把每次更新當成新的 App：在「輔助使用」清單看起來仍是開啟，實際上沒有權限。可執行 `tccutil reset Accessibility com.rex.myduobar` 清除後重新允許。
@@ -241,8 +242,8 @@ Wi-Fi、電池、防止休眠、智能退出、VPN、藍牙與聲音都往右展
 ```
 
 - App：`build/MyDuoBar.app`
-- 安裝磁碟映像：`dist/MyDuoBar-1.18.2-universal.dmg`
-- 壓縮檔：`dist/MyDuoBar-1.18.2-universal.zip`
+- 安裝磁碟映像：`dist/MyDuoBar-1.18.3-universal.dmg`
+- 壓縮檔：`dist/MyDuoBar-1.18.3-universal.zip`
 
 `scripts/toolchain.sh` 會依序檢查 `xcode-select` 指定的開發者目錄與 Command Line Tools，挑出第一組能以 Swift 6 編譯 macOS 27 SDK 的組合。可用下列環境變數覆寫：
 
