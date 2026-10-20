@@ -242,8 +242,8 @@ Wi-Fi、電池、防止休眠、智能退出、VPN、藍牙與聲音都往右展
 ```
 
 - App：`build/MyDuoBar.app`
-- 安裝磁碟映像：`dist/MyDuoBar-1.19.0-universal.dmg`
-- 壓縮檔：`dist/MyDuoBar-1.19.0-universal.zip`
+- 安裝磁碟映像：`dist/MyDuoBar-1.20.0-universal.dmg`
+- 壓縮檔：`dist/MyDuoBar-1.20.0-universal.zip`
 
 `scripts/toolchain.sh` 會依序檢查 `xcode-select` 指定的開發者目錄與 Command Line Tools，挑出第一組能以 Swift 6 編譯 macOS 27 SDK 的組合。可用下列環境變數覆寫：
 
