@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let monitor = SystemMonitor()
     private let preferences = IconPreferences()
     private let canvas = StatusIconView()
+    private let speedView = NetworkSpeedView()
+    private let speedMonitor = NetworkSpeedMonitor()
+    private static let iconWidth: CGFloat = 36
     private var settings: SettingsController?
     private let systemIconsItem = NSMenuItem(title: "", action: #selector(openSystemIcons), keyEquivalent: "")
     private let settingsItem = NSMenuItem(title: "", action: #selector(showSettings), keyEquivalent: ",")
@@ -23,16 +26,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        item = NSStatusBar.system.statusItem(withLength: 36)
+        item = NSStatusBar.system.statusItem(withLength: Self.iconWidth)
         item.autosaveName = "MyDuoBar"
         item.isVisible = true
         if let button = item.button {
             // Reserve the full drawing height; AppKit sizes the status item to this image.
             button.image = NSImage(size: DuoIcon.size)
             button.imagePosition = .imageOnly
-            canvas.frame = button.bounds
-            canvas.autoresizingMask = [.width, .height]
+            canvas.frame = NSRect(x: 0, y: 0, width: Self.iconWidth, height: button.bounds.height)
+            canvas.autoresizingMask = [.height]
             button.addSubview(canvas)
+            speedView.frame = NSRect(x: Self.iconWidth, y: 0, width: NetworkSpeedView.width, height: button.bounds.height)
+            speedView.autoresizingMask = [.height]
+            button.addSubview(speedView)
         }
         let openSettings: (SystemSettings.Page) -> Void = { [weak self] page in
             self?.menu.cancelTracking()
@@ -72,8 +78,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         preferences.onChange = { [weak self] in
             guard let self else { return }
+            self.applySpeedPreference()
             self.update(self.monitor.status)
         }
+        speedMonitor.onChange = { [weak self] speed in self?.speedView.speed = speed }
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.speedMonitor.stop() }
+        }
+        workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applySpeedPreference() }
+        }
+        applySpeedPreference()
         update(monitor.status)
         monitor.start()
         smartQuitMenu.activate()
@@ -135,6 +151,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func menuDidClose(_ menu: NSMenu) { monitor.setMenuOpen(false) }
 
+    /// Widens the status item for the upload and download lines and samples only while they are shown.
+    private func applySpeedPreference() {
+        let show = preferences.showNetworkSpeed
+        speedView.isHidden = !show
+        item.length = Self.iconWidth + (show ? NetworkSpeedView.width : 0)
+        if show { speedMonitor.start() } else { speedMonitor.stop() }
+    }
+
     private func renderIcon() {
         canvas.update(monitor.status, showVolume: preferences.showVolume)
     }
@@ -150,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func openSystemIcons() { SystemSettings.open(.menubar) }
     @objc private func quitApp() { NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); monitor.stop(); sleepMenu.stop(); smartQuitMenu.stop(); batteryMenu.powerLog.stop() }
+    func applicationWillTerminate(_ notification: Notification) { canvas.stopAnimations(); speedMonitor.stop(); monitor.stop(); sleepMenu.stop(); smartQuitMenu.stop(); batteryMenu.powerLog.stop() }
 }
 
 if CommandLine.arguments.contains("--diagnose") {

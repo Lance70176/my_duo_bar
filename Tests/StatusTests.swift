@@ -103,6 +103,19 @@ import Foundation
         check(!restored.showVolume, "the hidden choice survives reload")
         restored.setShowVolume(true)
         check(IconPreferences(defaults: defaults).showVolume, "showing the marks again is saved")
+        check(restored.showNetworkSpeed, "the network speed shows by default")
+        restored.setShowNetworkSpeed(false)
+        check(!IconPreferences(defaults: defaults).showNetworkSpeed, "hiding the network speed is saved")
+        check(NetworkSpeed.format(0) == "0 KB/s" && NetworkSpeed.format(8_400) == "8 KB/s"
+              && NetworkSpeed.format(999_400) == "999 KB/s" && NetworkSpeed.format(999_600) == "1.0 MB/s"
+              && NetworkSpeed.format(1_240_000) == "1.2 MB/s" && NetworkSpeed.format(35_400_000) == "35 MB/s"
+              && NetworkSpeed.format(-5) == "0 KB/s", "rates read in KB/s, then MB/s")
+        let older = InterfaceCounters(received: ["en0": UInt32.max - 999, "en1": 10], sent: ["en0": 500])
+        let newer = InterfaceCounters(received: ["en0": 1_000, "en1": 10, "en5": 9_999], sent: ["en0": 4_500])
+        let rate = newer.speed(since: older, seconds: 2)
+        check(rate.download == 1_000 && rate.upload == 2_000,
+              "a counter rollover still counts and a new interface waits for its next sample")
+        check(newer.speed(since: older, seconds: 0) == NetworkSpeed(), "no time passed means no rate")
         check(StatusGlyph.allCases.allSatisfy { $0.isActive(in: SystemStatus.preview()) }, "each active state reports itself")
         let before = SystemStatus.preview()
         check(!before.shouldAnimate(from: before), "unchanged state does not animate")

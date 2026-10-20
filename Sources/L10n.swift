@@ -386,6 +386,13 @@ enum L10n {
              "アイコン下部の 4 つの点は現在の出力装置の音量を 25% 刻みで示し、消音中は 1 本の横線になります。チェックを外すと非表示になります。")
     }
     static var showVolumeMarks: String { pick("在圖示底部顯示音量", "Show volume at the bottom of the icon", "アイコンの下部に音量を表示") }
+    static var networkSpeed: String { pick("網路速度", "Network Speed", "ネットワーク速度") }
+    static var networkSpeedNote: String {
+        pick("在圖示右側用兩行小字顯示每秒上傳（↑）與下載（↓）量，每秒更新一次。",
+             "Shows upload (↑) and download (↓) per second in two small lines to the right of the icon, updated every second.",
+             "アイコンの右側に、毎秒のアップロード（↑）とダウンロード（↓）量を 2 行の小さな文字で表示し、毎秒更新します。")
+    }
+    static var showNetworkSpeed: String { pick("在圖示旁顯示上傳與下載速度", "Show upload and download speed beside the icon", "アイコンの横にアップロードとダウンロードの速度を表示") }
     static var tidyMenuBar: String { pick("整理系統選單列", "Tidy the Menu Bar", "メニューバーを整理") }
     static var tidyMenuBarNote: String {
         pick("在系統設定中關閉原生 Wi-Fi、電池的選單列顯示，即可留出空間。",

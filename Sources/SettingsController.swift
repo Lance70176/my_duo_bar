@@ -6,6 +6,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private static let contentWidth: CGFloat = 496
     private let preferences: IconPreferences
     private let volumeCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let speedCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let login = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let languagePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let location = CLLocationManager()
@@ -25,6 +26,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         location.delegate = self
         login.target = self; login.action = #selector(toggleLogin)
         volumeCheck.target = self; volumeCheck.action = #selector(toggleVolume)
+        speedCheck.target = self; speedCheck.action = #selector(toggleSpeed)
         languagePopup.target = self; languagePopup.action = #selector(changeLanguage(_:))
         languagePopup.controlSize = .small
         build()
@@ -85,6 +87,12 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         volumeCheck.state = preferences.showVolume ? .on : .off
         stack.addArrangedSubview(volumeCheck)
         icon.showVolume = preferences.showVolume
+        addSeparator(stack)
+        stack.addArrangedSubview(heading(L10n.networkSpeed))
+        stack.addArrangedSubview(note(L10n.networkSpeedNote))
+        speedCheck.title = L10n.showNetworkSpeed
+        speedCheck.state = preferences.showNetworkSpeed ? .on : .off
+        stack.addArrangedSubview(speedCheck)
         addSeparator(stack)
         stack.addArrangedSubview(heading(L10n.tidyMenuBar))
         stack.addArrangedSubview(note(L10n.tidyMenuBarNote))
@@ -186,6 +194,10 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         updateIconGuide()
     }
 
+    @objc private func toggleSpeed() {
+        preferences.setShowNetworkSpeed(speedCheck.state == .on)
+    }
+
     @objc private func changeLanguage(_ sender: NSPopUpButton) {
         guard let raw = sender.selectedItem?.representedObject as? String,
               let language = AppLanguage(rawValue: raw), language != L10n.preference else { return }
@@ -222,6 +234,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.status = status
         icon.showVolume = preferences.showVolume
         volumeCheck.state = preferences.showVolume ? .on : .off
+        speedCheck.state = preferences.showNetworkSpeed ? .on : .off
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
     func present(status: SystemStatus) {
