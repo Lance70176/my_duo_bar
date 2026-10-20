@@ -160,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func renderIcon() {
-        canvas.update(monitor.status, showVolume: preferences.showVolume)
+        canvas.update(monitor.status, showVolume: preferences.showVolume, alternate: preferences.alternateCenter)
     }
 
     @objc private func showSettings() {

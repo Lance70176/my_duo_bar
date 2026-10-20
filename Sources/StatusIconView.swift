@@ -9,6 +9,8 @@ import QuartzCore
 final class StatusIconView: NSView {
     /// How long the headphone symbol replaces Wi-Fi after headphones connect.
     static let headphoneGlimpse: TimeInterval = 2.2
+    /// How long Wi-Fi and the battery percentage each stay in the middle while the icon alternates.
+    static let alternateInterval: TimeInterval = 3
 
     private let outer = CALayer()
     private let track = CAShapeLayer()
@@ -19,6 +21,10 @@ final class StatusIconView: NSView {
     private let bar = CAShapeLayer()
     private var status: SystemStatus?
     private var showVolume = true
+    private var alternate = false
+    /// True while the middle shows the battery percentage instead of Wi-Fi.
+    private(set) var isShowingBattery = false
+    private var alternateTimer: Timer?
     /// The symbol shown in place of Wi-Fi while headphones have just connected.
     private var glimpseSymbol: String?
     private var glimpseGeneration = 0
@@ -87,11 +93,17 @@ final class StatusIconView: NSView {
         render(status, animated: false)
     }
 
-    func update(_ value: SystemStatus, showVolume: Bool = true) {
+    func update(_ value: SystemStatus, showVolume: Bool = true, alternate: Bool = false) {
         let old = status
         let volumeChanged = showVolume != self.showVolume
+        if alternate != self.alternate {
+            self.alternate = alternate
+            setAlternating(alternate)
+            if old == value && !volumeChanged { render(value, animated: !reducedMotion); return }
+        }
         guard old != value || volumeChanged else { return }
         status = value; self.showVolume = showVolume
+        if value.battery.percent == nil { isShowingBattery = false }
         if let old, !old.audio.headphoneActive, value.audio.headphoneActive {
             beginGlimpse(value.audio.headphoneSymbol)
         } else if !value.audio.headphoneActive {
@@ -101,6 +113,27 @@ final class StatusIconView: NSView {
         if let old, value.shouldAnimate(from: old) { animateTurn() }
         if let old, !old.battery.connectedToPower && value.battery.connectedToPower { animateCharging() }
         if !value.battery.connectedToPower { sweep.removeAllAnimations(); sweep.opacity = 0 }
+    }
+
+    private func setAlternating(_ on: Bool) {
+        alternateTimer?.invalidate(); alternateTimer = nil
+        isShowingBattery = false
+        guard on else { return }
+        let timer = Timer(timeInterval: Self.alternateInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.advanceCenter() }
+        }
+        timer.tolerance = 0.2
+        RunLoop.main.add(timer, forMode: .common)
+        alternateTimer = timer
+    }
+
+    /// Swaps the middle between Wi-Fi and the battery percentage; stays on Wi-Fi when the level is unknown.
+    func advanceCenter() {
+        guard alternate, let status else { return }
+        let next = !isShowingBattery && status.battery.percent != nil
+        guard next != isShowingBattery else { return }
+        isShowingBattery = next
+        render(status, animated: !reducedMotion)
     }
 
     /// Shows the headphones in the middle for a moment, then brings Wi-Fi back.
@@ -150,7 +183,8 @@ final class StatusIconView: NSView {
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
             DuoIcon.draw(status: value, showVolume: showVolume, in: NSRect(origin: .zero, size: DuoIcon.size), color: color,
-                         components: .center, centerSymbol: glimpseSymbol, centerTint: .controlAccentColor)
+                         components: .center, centerSymbol: glimpseSymbol, centerTint: .controlAccentColor,
+                         centerPercent: isShowingBattery ? value.battery.percent : nil)
             NSGraphicsContext.restoreGraphicsState()
             if animated {
                 let fade = CATransition(); fade.type = .fade; fade.duration = 0.24
@@ -227,6 +261,7 @@ final class StatusIconView: NSView {
         sweep.add(group, forKey: "charging")
     }
     func stopAnimations() {
+        alternateTimer?.invalidate(); alternateTimer = nil
         ([outer, center, track, battery, sweep, bar] + dots).forEach { $0.removeAllAnimations() }
     }
 }

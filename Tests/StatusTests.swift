@@ -106,6 +106,9 @@ import Foundation
         check(restored.showNetworkSpeed, "the network speed shows by default")
         restored.setShowNetworkSpeed(false)
         check(!IconPreferences(defaults: defaults).showNetworkSpeed, "hiding the network speed is saved")
+        check(restored.alternateCenter, "the middle alternates by default")
+        restored.setAlternateCenter(false)
+        check(!IconPreferences(defaults: defaults).alternateCenter, "turning the alternation off is saved")
         check(NetworkSpeed.format(0) == "0 KB/s" && NetworkSpeed.format(8_400) == "8 KB/s"
               && NetworkSpeed.format(999_400) == "999 KB/s" && NetworkSpeed.format(999_600) == "1.0 MB/s"
               && NetworkSpeed.format(1_240_000) == "1.2 MB/s" && NetworkSpeed.format(35_400_000) == "35 MB/s"

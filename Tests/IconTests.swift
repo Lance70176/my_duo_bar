@@ -8,14 +8,15 @@ struct IconTests {
     }
     static let pixelsWide = Int(DuoIcon.size.width) * 10
     static let pixelsHigh = Int(DuoIcon.size.height) * 10
-    static func bitmap(_ status: SystemStatus, frame: IconFrame? = nil, showVolume: Bool = true, centerSymbol: String? = nil) -> NSBitmapImageRep {
+    static func bitmap(_ status: SystemStatus, frame: IconFrame? = nil, showVolume: Bool = true, centerSymbol: String? = nil,
+                       centerPercent: Int? = nil) -> NSBitmapImageRep {
         let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixelsWide, pixelsHigh: pixelsHigh,
                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
         DuoIcon.draw(status: status, showVolume: showVolume, presentation: frame, in: NSRect(x: 0, y: 0, width: pixelsWide, height: pixelsHigh),
-                     color: .black, centerSymbol: centerSymbol)
+                     color: .black, centerSymbol: centerSymbol, centerPercent: centerPercent)
         NSGraphicsContext.restoreGraphicsState()
         return rep
     }
@@ -174,6 +175,22 @@ struct IconTests {
             view.stopAnimations(); view.animateTurn()
             check(trackLayer.animation(forKey: "turn") != nil, "clicking the menu starts a fresh turn when idle")
         }
+        let wifiCenter = bitmap(vpnOn), percentCenter = bitmap(vpnOn, centerPercent: 87)
+        check(!sameCenter(wifiCenter, percentCenter), "the battery percentage replaces Wi-Fi in the middle")
+        check(!sameCenter(percentCenter, bitmap(vpnOn, centerPercent: 100)), "the number follows the battery level")
+        check(alpha(percentCenter, at: dotCenter) == alpha(wifiCenter, at: dotCenter), "the number leaves the marks alone")
+        view.update(vpnOn, alternate: true)
+        check(!view.isShowingBattery, "alternation starts on Wi-Fi")
+        view.advanceCenter()
+        check(view.isShowingBattery, "the next step shows the battery percentage")
+        view.advanceCenter()
+        check(!view.isShowingBattery, "and then Wi-Fi again")
+        var unknownLevel = vpnOn; unknownLevel.battery.percent = nil
+        view.update(unknownLevel, alternate: true); view.advanceCenter()
+        check(!view.isShowingBattery, "an unknown level keeps Wi-Fi in the middle")
+        view.update(vpnOn, alternate: true); view.advanceCenter()
+        view.update(vpnOn, alternate: false)
+        check(!view.isShowingBattery, "turning alternation off brings Wi-Fi back at once")
         var connected = vpnOn; connected.audio.headphoneNames = ["AirPods Pro"]
         view.update(connected)
         check(view.isShowingHeadphones, "connecting headphones shows them in the middle of the icon")

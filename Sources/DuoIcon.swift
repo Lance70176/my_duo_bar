@@ -103,9 +103,11 @@ enum DuoIcon {
 
     enum Components { case all, center }
 
-    /// Draws the icon. `centerSymbol` replaces the Wi-Fi glyph for the moment headphones connect, in `centerTint`.
+    /// Draws the icon. `centerSymbol` replaces the Wi-Fi glyph for the moment headphones connect, in `centerTint`;
+    /// `centerPercent` replaces it with the battery level while the middle alternates.
     static func draw(status: SystemStatus, showVolume: Bool = true, presentation: IconFrame? = nil, in rect: NSRect, color: NSColor,
-                     components: Components = .all, centerSymbol: String? = nil, centerTint: NSColor? = nil) {
+                     components: Components = .all, centerSymbol: String? = nil, centerTint: NSColor? = nil,
+                     centerPercent: Int? = nil) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.saveGState()
         let scale = min(rect.width / size.width, rect.height / size.height)
@@ -138,6 +140,8 @@ enum DuoIcon {
         }
         if let centerSymbol {
             drawSymbol(centerSymbol, in: centerRect, color: centerTint ?? color)
+        } else if let centerPercent {
+            drawPercent(centerPercent, color: color)
         } else {
             if let old = frame.previousWiFi, frame.wifiBlend < 1 {
                 ctx.saveGState(); ctx.setAlpha(1-frame.wifiBlend)
@@ -214,6 +218,20 @@ enum DuoIcon {
             path.line(to: NSPoint(x: rect.maxX - 1.5 * k, y: rect.minY))
             path.stroke()
         }
+    }
+
+    /// The battery level inside the capsule: the number with a smaller percent sign, resting above the marks.
+    private static func drawPercent(_ percent: Int, color: NSColor) {
+        let digits = NSAttributedString(string: "\(max(0, min(100, percent)))", attributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: percent >= 100 ? 7.5 : 8.5, weight: .bold), .foregroundColor: color])
+        let sign = NSAttributedString(string: "%", attributes: [
+            .font: NSFont.systemFont(ofSize: 5, weight: .bold), .foregroundColor: color])
+        let width = digits.size().width + sign.size().width
+        let baseline: CGFloat = 7.6
+        let x = center.x - width / 2
+        let digitFont = digits.attribute(.font, at: 0, effectiveRange: nil) as! NSFont
+        digits.draw(at: NSPoint(x: x, y: baseline + digitFont.descender))
+        sign.draw(at: NSPoint(x: x + digits.size().width, y: baseline + NSFont.systemFont(ofSize: 5, weight: .bold).descender))
     }
 
     static func drawSymbol(_ name: String, in rect: NSRect, color: NSColor) {

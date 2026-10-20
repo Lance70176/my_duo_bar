@@ -386,6 +386,13 @@ enum L10n {
              "アイコン下部の 4 つの点は現在の出力装置の音量を 25% 刻みで示し、消音中は 1 本の横線になります。チェックを外すと非表示になります。")
     }
     static var showVolumeMarks: String { pick("在圖示底部顯示音量", "Show volume at the bottom of the icon", "アイコンの下部に音量を表示") }
+    static var centerAlternate: String { pick("中央切換", "Center Rotation", "中央の切り替え") }
+    static var centerAlternateNote: String {
+        pick("圖示中央每 3 秒在 Wi-Fi 訊號與電量百分比之間切換。取消勾選則一直顯示 Wi-Fi。",
+             "The middle of the icon switches between the Wi-Fi signal and the battery percentage every 3 seconds. Uncheck to always show Wi-Fi.",
+             "アイコン中央を 3 秒ごとに Wi-Fi の電波とバッテリー残量（%）で切り替えます。チェックを外すと常に Wi-Fi を表示します。")
+    }
+    static var alternateCenter: String { pick("切換顯示 Wi-Fi 與電量百分比", "Alternate Wi-Fi and battery percentage", "Wi-Fi とバッテリー残量を切り替えて表示") }
     static var networkSpeed: String { pick("網路速度", "Network Speed", "ネットワーク速度") }
     static var networkSpeedNote: String {
         pick("在圖示右側用兩行小字顯示每秒上傳（↑）與下載（↓）量，每秒更新一次。",

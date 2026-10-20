@@ -7,6 +7,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private let preferences: IconPreferences
     private let volumeCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let speedCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let alternateCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let login = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let languagePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let location = CLLocationManager()
@@ -27,6 +28,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         login.target = self; login.action = #selector(toggleLogin)
         volumeCheck.target = self; volumeCheck.action = #selector(toggleVolume)
         speedCheck.target = self; speedCheck.action = #selector(toggleSpeed)
+        alternateCheck.target = self; alternateCheck.action = #selector(toggleAlternate)
         languagePopup.target = self; languagePopup.action = #selector(changeLanguage(_:))
         languagePopup.controlSize = .small
         build()
@@ -87,6 +89,12 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         volumeCheck.state = preferences.showVolume ? .on : .off
         stack.addArrangedSubview(volumeCheck)
         icon.showVolume = preferences.showVolume
+        addSeparator(stack)
+        stack.addArrangedSubview(heading(L10n.centerAlternate))
+        stack.addArrangedSubview(note(L10n.centerAlternateNote))
+        alternateCheck.title = L10n.alternateCenter
+        alternateCheck.state = preferences.alternateCenter ? .on : .off
+        stack.addArrangedSubview(alternateCheck)
         addSeparator(stack)
         stack.addArrangedSubview(heading(L10n.networkSpeed))
         stack.addArrangedSubview(note(L10n.networkSpeedNote))
@@ -194,6 +202,10 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         updateIconGuide()
     }
 
+    @objc private func toggleAlternate() {
+        preferences.setAlternateCenter(alternateCheck.state == .on)
+    }
+
     @objc private func toggleSpeed() {
         preferences.setShowNetworkSpeed(speedCheck.state == .on)
     }
@@ -235,6 +247,7 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.showVolume = preferences.showVolume
         volumeCheck.state = preferences.showVolume ? .on : .off
         speedCheck.state = preferences.showNetworkSpeed ? .on : .off
+        alternateCheck.state = preferences.alternateCenter ? .on : .off
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
     func present(status: SystemStatus) {
