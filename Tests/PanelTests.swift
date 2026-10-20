@@ -539,6 +539,10 @@ extension PanelTests {
               && PowerChartView.clock(Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 30, hour: 0, minute: 20))!) == "00:20",
               "the crosshair legend names the level and charge power, and times read as a clock")
         chart.hoverX = nil
+        let spread = PowerChartView.spread([50, 52, 10], gap: 14, within: 0...100)
+        check(spread[2] == 10 && spread[0] == 50 && spread[1] == 64, "value tags keep their place unless they would overlap")
+        let crowded = PowerChartView.spread([98, 99, 100], gap: 14, within: 7...93)
+        check(crowded == [65, 79, 93], "tags pushed past the top slide back down together")
 
         // The history window: a chart that pans and zooms over the readings, with range buttons.
         let history = PowerHistoryWindowController(fileURL: nil)

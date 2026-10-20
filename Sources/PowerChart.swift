@@ -234,10 +234,11 @@ final class PowerChartView: NSView {
         cross.lineWidth = 1
         NSColor.labelColor.withAlphaComponent(0.35).setStroke()
         cross.stroke()
-        var dots: [(NSColor, NSPoint)] = [(Self.inputColor, watts(hovered, hovered.inputWatts)),
-                                          (Self.chargeColor, watts(hovered, max(0, hovered.batteryWatts)))]
-        if let percent = hovered.percent { dots.append((Self.levelColor, level(hovered, percent))) }
-        for (color, center) in dots {
+        var dots: [(NSColor, NSPoint, String)] = [
+            (Self.inputColor, watts(hovered, hovered.inputWatts), String(format: "%.1f W", hovered.inputWatts)),
+            (Self.chargeColor, watts(hovered, max(0, hovered.batteryWatts)), String(format: "%+.1f W", hovered.batteryWatts))]
+        if let percent = hovered.percent { dots.append((Self.levelColor, level(hovered, percent), "\(percent)%")) }
+        for (color, center, _) in dots {
             let dot = NSBezierPath(ovalIn: NSRect(x: center.x - 3.5, y: center.y - 3.5, width: 7, height: 7))
             color.setFill()
             dot.fill()
@@ -245,6 +246,43 @@ final class PowerChartView: NSView {
             dot.lineWidth = 1
             dot.stroke()
         }
+
+        // Each dot's value in a small tag beside it, on the side with room, spread apart where the lines meet.
+        let tagFont = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .semibold)
+        let tags = dots.map { color, _, text in
+            NSAttributedString(string: text, attributes: [.font: tagFont, .foregroundColor: color])
+        }
+        let height = ceil(tagFont.ascender - tagFont.descender) + 2
+        let widest = tags.map { ceil($0.size().width) }.max() ?? 0
+        let onLeft = lineX + 8 + widest + 8 > plot.maxX
+        let centers = Self.spread(dots.map(\.1.y), gap: height + 2, within: plot.minY + height / 2...plot.maxY - height / 2)
+        for (index, tag) in tags.enumerated() {
+            let width = ceil(tag.size().width) + 8
+            let box = NSRect(x: onLeft ? lineX - 8 - width : lineX + 8, y: centers[index] - height / 2, width: width, height: height)
+            NSColor.windowBackgroundColor.withAlphaComponent(0.88).setFill()
+            NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
+            dots[index].0.withAlphaComponent(0.6).setStroke()
+            let outline = NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5), xRadius: 4, yRadius: 4)
+            outline.lineWidth = 1
+            outline.stroke()
+            tag.draw(at: NSPoint(x: box.minX + 4, y: box.minY + 1 - tagFont.descender))
+        }
+    }
+
+    /// Vertical centres for the value tags: each as close to its dot as possible, at least `gap` apart and inside `range`.
+    static func spread(_ positions: [CGFloat], gap: CGFloat, within range: ClosedRange<CGFloat>) -> [CGFloat] {
+        let order = positions.indices.sorted { positions[$0] < positions[$1] }
+        var placed = order.map { min(max(positions[$0], range.lowerBound), range.upperBound) }
+        for index in placed.indices.dropFirst() { placed[index] = max(placed[index], placed[index - 1] + gap) }
+        // Pushed past the top: slide the stack back down, keeping the spacing.
+        if let last = placed.last, last > range.upperBound {
+            let overflow = last - range.upperBound
+            for index in placed.indices { placed[index] -= overflow }
+            for index in placed.indices.reversed().dropFirst() { placed[index] = min(placed[index], placed[index + 1] - gap) }
+        }
+        var result = positions
+        for (rank, original) in order.enumerated() { result[original] = placed[rank] }
+        return result
     }
 
     // MARK: Pointer

@@ -220,18 +220,13 @@ enum DuoIcon {
         }
     }
 
-    /// The battery level inside the capsule: the number with a smaller percent sign, resting above the marks.
+    /// The battery level inside the capsule as a bare number, centred between the marks and the top of the ring.
     private static func drawPercent(_ percent: Int, color: NSColor) {
-        let digits = NSAttributedString(string: "\(max(0, min(100, percent)))", attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: percent >= 100 ? 7.5 : 8.5, weight: .bold), .foregroundColor: color])
-        let sign = NSAttributedString(string: "%", attributes: [
-            .font: NSFont.systemFont(ofSize: 5, weight: .bold), .foregroundColor: color])
-        let width = digits.size().width + sign.size().width
-        let baseline: CGFloat = 7.6
-        let x = center.x - width / 2
-        let digitFont = digits.attribute(.font, at: 0, effectiveRange: nil) as! NSFont
-        digits.draw(at: NSPoint(x: x, y: baseline + digitFont.descender))
-        sign.draw(at: NSPoint(x: x + digits.size().width, y: baseline + NSFont.systemFont(ofSize: 5, weight: .bold).descender))
+        let value = max(0, min(100, percent))
+        let font = NSFont.monospacedDigitSystemFont(ofSize: value >= 100 ? 9.5 : 11, weight: .bold)
+        let digits = NSAttributedString(string: "\(value)", attributes: [.font: font, .foregroundColor: color])
+        let baseline: CGFloat = 11 - font.capHeight / 2
+        digits.draw(at: NSPoint(x: center.x - digits.size().width / 2, y: baseline + font.descender))
     }
 
     static func drawSymbol(_ name: String, in rect: NSRect, color: NSColor) {
